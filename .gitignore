@@ -1,0 +1,16 @@
+# Python virtual environment
+venv/
+
+# Vector database (extracted from kiali-byok image via make setup-vector-db)
+vector_db/
+
+# Pip temp files
+/tmp/.pip-*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# MCP server temp configs
+/tmp/mcp-config-*.toml

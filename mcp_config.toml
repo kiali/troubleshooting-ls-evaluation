@@ -1,0 +1,5 @@
+toolsets = ["core", "kiali"]
+log_level = 0 
+[toolset_configs.kiali] 
+url = "${KIALI_ENDPOINT}" 
+insecure = true

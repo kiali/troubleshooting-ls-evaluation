@@ -1,0 +1,113 @@
+# Troubleshooting scenario evaluations.
+#
+# Each scenario injects a specific broken cluster state via setup_script,
+# asks OLS to diagnose it, then tears down via cleanup_script.
+# These are single-turn or short multi-turn conversations where the expected
+# answer is known in advance and scored with custom:answer_correctness.
+
+# --- fix_bookinfo_fault_injection: Diagnose and fix a 100% fault injection on ratings ---
+# Troubleshooting scenario evaluations.
+#
+# Each scenario injects a specific broken cluster state via setup_script,
+# asks OLS to diagnose it, then tears down via cleanup_script.
+# These are single-turn or short multi-turn conversations where the expected
+# answer is known in advance and scored with custom:answer_correctness.
+
+# --- fix_bookinfo_fault_injection: Diagnose and fix a 100% fault injection on ratings ---
+- conversation_group_id: fix_bookinfo_fault_injection
+  tag: fix_bookinfo_fault_injection
+  description: "A fault injection aborts 100% of requests to ratings with HTTP 503. The agent must identify the root cause using Kiali and propose the fix."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        My Bookinfo application in the bookinfo namespace is having problems.
+        Users are seeing errors when loading the product page.
+        Can you investigate what is wrong?
+      expected_response: >
+        The agent should identify that the ratings service is returning HTTP 503 errors
+        at 100% rate due to a fault injection configured in the VirtualService named
+        ratings in the bookinfo namespace.
+      tool_calls:
+        - - tool_name: kiali_get_mesh_status
+          - tool_name: kiali_get_mesh_traffic_graph
+            arguments:
+              namespaces: bookinfo      
+      expected_tool_calls:
+        - - tool_name: kiali_get_mesh_status
+          - tool_name: kiali_get_mesh_traffic_graph
+            arguments:
+              namespaces: bookinfo      
+      turn_metrics:
+        - "custom:answer_correctness" 
+          
+    - turn_id: fix
+      query: >
+        How can I fix it?
+      expected_response: >
+        The agent should suggest removing or editing the fault injection block from
+        the ratings VirtualService. The fix is to delete the fault.abort section
+        from the VirtualService, or to delete the VirtualService entirely if it
+        was only created for testing purposes.
+      tool_calls:
+        - - tool_name: kiali_manage_istio_config_read
+            arguments:
+              action: list              
+              namespace: bookinfo
+              serviceName: ratings
+              
+          - tool_name: kiali_manage_istio_config_read
+            arguments:
+              action: get
+              version: v1
+              kind: VirtualService
+              object: ratings
+              group: networking.istio.io
+              namespace: bookinfo
+              serviceName: ratings
+      expected_tool_calls:
+        - - tool_name: kiali_manage_istio_config_read
+            arguments:
+              serviceName: ratings
+              namespace: bookinfo
+              action: list
+          - tool_name: kiali_manage_istio_config_read
+            arguments:
+              action: get
+              version: v1
+              kind: VirtualService
+              object: ratings
+              group: networking.istio.io
+              namespace: bookinfo
+              serviceName: ratings
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: solution
+      query: >
+       Delete the fault injection entirely.
+      expected_response: >
+        The agent should delete the fault injection entirely.
+      tool_calls:
+        - - tool_name: kiali_manage_istio_config
+            arguments:
+              group: networking.istio.io
+              version: v1
+              kind: VirtualService
+              object: ratings
+              namespace: bookinfo
+              action: delete
+      expected_tool_calls:
+        - - tool_name: kiali_manage_istio_config
+            arguments:
+              group: networking.istio.io
+              version: v1
+              kind: VirtualService
+              object: ratings
+              namespace: bookinfo
+              action: delete
+      turn_metrics:
+        - custom:answer_correctness            
+  
+  setup_script: scenarios/fix_bookinfo_fault_injection/setup.sh
+  cleanup_script: scenarios/fix_bookinfo_fault_injection/cleanup.sh

@@ -1,6 +1,7 @@
 # Python virtual environment
 venv/
 
+dashboard/
 .caches/
 # Evaluation results and generated reports
 # (per-scenario RESULTS.md files live inside results/ which is already ignored)

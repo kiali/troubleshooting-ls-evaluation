@@ -52,12 +52,17 @@ def find_latest_run(results_dir: Path) -> tuple[Path, Path]:
 
 def find_all_runs(results_dir: Path) -> list[tuple[str, Path, Path]]:
     """
-    Return all (scenario_name, csv, json) tuples, one per scenario subdir.
-    Falls back to a flat results/ layout if no subdirs found.
+    Return all (scenario_name, csv, json) tuples.
+
+    Layout A — per-scenario subdirs (make <scenario> targets):
+        results/<name>/evaluation_*_detailed.csv
+
+    Layout B — flat (make all with conversations.yaml):
+        results/evaluation_*_detailed.csv
+        → returned as ("", csv, json) — no subdir name needed
     """
     pairs: list[tuple[str, Path, Path]] = []
 
-    # Per-scenario subdirs: results/<name>/evaluation_*.csv
     for subdir in sorted(results_dir.iterdir()):
         if not subdir.is_dir() or subdir.name == "graphs":
             continue
@@ -66,12 +71,12 @@ def find_all_runs(results_dir: Path) -> list[tuple[str, Path, Path]]:
         if csvs and jsons:
             pairs.append((subdir.name, csvs[0], jsons[0]))
 
-    # Flat fallback
+    # Flat fallback — all conversations in one run
     if not pairs:
         csvs = sorted(results_dir.glob("evaluation_*_detailed.csv"), reverse=True)
         jsons = sorted(results_dir.glob("evaluation_*_summary.json"), reverse=True)
         if csvs and jsons:
-            pairs.append(("results", csvs[0], jsons[0]))
+            pairs.append(("", csvs[0], jsons[0]))
 
     return pairs
 
@@ -428,7 +433,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate RESULTS.md from evaluation output")
     parser.add_argument("--results-dir", default=str(root / "results"))
     parser.add_argument("--scenarios-dir", default=str(root / "scenarios"),
-                        help="Directory containing scenario folders with eval_data.yaml files")
+                        help="Directory containing conversations.yaml or scenario eval_data.yaml files")
     parser.add_argument("--output", default=str(root / "RESULTS.md"))
     args = parser.parse_args()
 
@@ -441,98 +446,46 @@ def main() -> None:
         print(f"ERROR: No evaluation results found under {results_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Load all scenario eval_data.yaml files from scenarios/*/eval_data.yaml
+    # Load conversations: prefer scenarios/conversations.yaml, fall back to scenarios/*/eval_data.yaml
     all_scenarios: dict = {}
     if scenarios_dir.exists():
-        for scenario_dir in sorted(scenarios_dir.iterdir()):
-            eval_file = scenario_dir / "eval_data.yaml"
-            if eval_file.exists():
-                all_scenarios.update(load_scenarios(eval_file))
+        conversations_file = scenarios_dir / "conversations.yaml"
+        if conversations_file.exists():
+            all_scenarios.update(load_scenarios(conversations_file))
+        else:
+            for scenario_dir in sorted(scenarios_dir.iterdir()):
+                eval_file = scenario_dir / "eval_data.yaml"
+                if eval_file.exists():
+                    all_scenarios.update(load_scenarios(eval_file))
 
-    # Generate per-scenario RESULTS.md inside each scenario's results folder,
-    # then build a summary RESULTS.md at the root that links to each one.
-    summary_rows: list[dict] = []
-
-    for name, csv_path, json_path in runs:
-        print(f"Processing: {name} / {csv_path.name}")
+    if len(runs) == 1:
+        # Single run (flat layout or single scenario) → full report at root
+        _, csv_path, json_path = runs[0]
+        print(f"Using: {csv_path.name}")
         graphs = find_graphs(csv_path)
-        per_output = csv_path.parent / "RESULTS.md"
-        generate_md(csv_path, json_path, graphs, all_scenarios, per_output)
+        generate_md(csv_path, json_path, graphs, all_scenarios, output)
+    else:
+        # Multiple runs (per-subdir) → combined full report at root
+        lines_all: list[str] = [
+            "# Evaluation Results — All Scenarios",
+            "",
+            f"**Scenarios:** {len(runs)}  ",
+            "",
+            "---",
+            "",
+        ]
+        for name, csv_path, json_path in runs:
+            print(f"Including: {name} / {csv_path.name}")
+            graphs = find_graphs(csv_path)
+            tmp = output.parent / f".tmp_results_{name}.md"
+            generate_md(csv_path, json_path, graphs, all_scenarios, tmp)
+            lines_all += [f"## Scenario: `{name}`", ""]
+            lines_all += tmp.read_text().splitlines()
+            tmp.unlink()
+            lines_all += ["", "---", ""]
 
-        # Collect summary stats for the root table
-        d = load_json(json_path)
-        overall = d.get("summary_stats", {}).get("overall", {})
-        by_metric = d.get("summary_stats", {}).get("by_metric", {})
-        timestamp = extract_timestamp(csv_path)
-        summary_rows.append({
-            "name": name,
-            "path": per_output.relative_to(root),
-            "timestamp": timestamp,
-            "total": overall.get("TOTAL", 0),
-            "pass": overall.get("PASS", 0),
-            "fail": overall.get("FAIL", 0),
-            "error": overall.get("ERROR", 0),
-            "pass_rate": overall.get("pass_rate", 0.0),
-            "by_metric": by_metric,
-            "tokens": overall.get("total_tokens", 0),
-        })
-
-    # Build the root summary RESULTS.md
-    lines_root: list[str] = [
-        "# Evaluation Results",
-        "",
-        f"**Scenarios:** {len(summary_rows)}  ",
-        "",
-        "---",
-        "",
-        "## Summary",
-        "",
-        "| Scenario | Run | ✅ Pass | ❌ Fail | ⚠️ Error | Pass Rate | Tokens |",
-        "|----------|-----|--------|--------|---------|-----------|--------|",
-    ]
-    for row in summary_rows:
-        link = f"[{row['name']}]({row['path']})"
-        lines_root.append(
-            f"| {link} | {row['timestamp']} | {row['pass']} | {row['fail']} | "
-            f"{row['error']} | {row['pass_rate']:.1f}% | {row['tokens']:,} |"
-        )
-    lines_root.append("")
-
-    # Per-metric breakdown per scenario
-    lines_root += ["## Metrics Breakdown", ""]
-    all_metrics: list[str] = []
-    for row in summary_rows:
-        for m in row["by_metric"]:
-            if m not in all_metrics:
-                all_metrics.append(m)
-
-    header = "| Scenario | " + " | ".join(f"`{m}`" for m in all_metrics) + " |"
-    sep = "|----------|" + "|".join("---" for _ in all_metrics) + "|"
-    lines_root += [header, sep]
-    for row in summary_rows:
-        cells = []
-        for m in all_metrics:
-            s = row["by_metric"].get(m, {})
-            if s:
-                rate = s.get("pass_rate", 0)
-                p = s.get("pass", 0)
-                f = s.get("fail", 0)
-                icon = result_emoji("PASS") if rate == 100.0 else (result_emoji("FAIL") if rate == 0 else "🟡")
-                cells.append(f"{icon} {p}/{p+f} ({rate:.0f}%)")
-            else:
-                cells.append("—")
-        link = f"[{row['name']}]({row['path']})"
-        lines_root.append("| " + link + " | " + " | ".join(cells) + " |")
-    lines_root.append("")
-
-    # Links to per-scenario reports
-    lines_root += ["## Scenario Reports", ""]
-    for row in summary_rows:
-        lines_root.append(f"- [{row['name']}]({row['path']}) — {row['timestamp']}")
-    lines_root.append("")
-
-    output.write_text("\n".join(lines_root), encoding="utf-8")
-    print(f"✓ Summary RESULTS.md written to {output}")
+        output.write_text("\n".join(lines_all), encoding="utf-8")
+        print(f"✓ Combined RESULTS.md written to {output}")
 
 
 if __name__ == "__main__":

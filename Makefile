@@ -4,10 +4,12 @@
 # Evaluation targets live in scenarios/scenarios.mk (included below).
 #
 # Usage:
-#   make setup                    # Create venv and install the evaluation framework
-#   make run-ols                  # Run the LightSpeed service container
-#   make run-mcp                  # Start the Kiali MCP server
-#   make all                      # Run all evaluation scenarios
+#   make setup                         # Create venv and install the evaluation framework
+#   make setup-dashboard               # Clone and install the web dashboard
+#   make run-ols                       # Run the LightSpeed service container
+#   make run-mcp                       # Start the Kiali MCP server
+#   make run-dashboard                 # Start the web dashboard (port 5173)
+#   make all                           # Run all evaluation scenarios
 #   make fix_bookinfo_fault_injection  # Run one scenario
 #   make check_mesh_status             # Run one scenario
 # ──────────────────────────────────────────────────────────────────────────────
@@ -20,6 +22,8 @@ MCP_CONFIG        ?= mcp_config.toml
 OLS_IMAGE         ?= quay.io/openshift-lightspeed/lightspeed-service-api:latest
 KIALI_RAG_VERSION ?= latest
 KIALI_RAG_DB      ?= quay.io/kiali/kiali-byok:$(KIALI_RAG_VERSION)
+LSE_TAG           ?= main       # lightspeed-evaluation tag/branch for the dashboard
+LSE_REPO          = https://github.com/lightspeed-core/lightspeed-evaluation.git
 
 OPENAI_KEY_FILE ?= $(HOME)/.openai/openai_api_key.txt
 GEMINI_KEY_FILE ?= $(HOME)/.gemini/google_api_key.txt
@@ -27,7 +31,7 @@ GEMINI_KEY_FILE ?= $(HOME)/.gemini/google_api_key.txt
 # ── Include evaluation targets ─────────────────────────────────────────────────
 include scenarios/scenarios.mk
 
-.PHONY: setup setup-vector-db run-ols run-mcp \
+.PHONY: setup setup-vector-db setup-dashboard run-dashboard run-ols run-mcp \
         check-venv check-openai-key check-services check-bookinfo
 
 # ── Environment guards ─────────────────────────────────────────────────────────
@@ -69,6 +73,38 @@ venv/bin/activate:
 	venv/bin/pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git
 
 setup: venv/bin/activate
+
+# ── setup-dashboard: sparse-clone the dashboard/ folder and install npm deps ───
+setup-dashboard:
+	@if [ -d dashboard ] && [ -n "$$(ls -A dashboard 2>/dev/null)" ]; then \
+	  printf '\033[0;33mSKIP\033[0m dashboard/ already exists. Remove it to re-download: rm -rf dashboard\n'; \
+	else \
+	  printf 'Cloning dashboard from lightspeed-evaluation@$(LSE_TAG)...\n'; \
+	  tmpdir=$$(mktemp -d); \
+	  git clone --depth 1 --branch $(LSE_TAG) --filter=blob:none --sparse \
+	    $(LSE_REPO) "$$tmpdir"; \
+	  git -C "$$tmpdir" sparse-checkout set dashboard; \
+	  cp -r "$$tmpdir/dashboard" .; \
+	  rm -rf "$$tmpdir"; \
+	  printf '\033[0;32m✓\033[0m Dashboard downloaded to dashboard/\n'; \
+	fi
+	@printf 'Installing npm dependencies...\n'
+	$(MAKE) -C dashboard install
+	@printf '\033[0;32m✓\033[0m Dashboard ready. Run: make run-dashboard\n'
+
+# ── run-dashboard: start the Vite dev server with project paths ────────────────
+run-dashboard:
+	@[ -d dashboard/node_modules ] || \
+	  (printf '\033[0;31mERROR:\033[0m Dashboard not set up. Run: make setup-dashboard\n'; exit 1)
+	cd dashboard && \
+	  LS_EVAL_SYSTEM_CFG_PATH=../system.yaml \
+	  LS_EVAL_DATA_PATH=../scenarios/conversations.yaml \
+	  LS_EVAL_REPORTS_PATH=../results \
+	  LS_EVAL_DASHBOARD_RUN_ENABLED=true \
+	  OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
+	  GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \
+	  API_KEY=$$(oc whoami -t) \
+	  npx vite
 
 setup-vector-db:
 	@if [ -d vector_db/kiali ] && [ -n "$$(ls -A vector_db/kiali 2>/dev/null)" ]; then \

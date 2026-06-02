@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-01T10:10:34.624439",
+  "timestamp": "2026-06-02T10:20:38.155905",
   "total_evaluations": 3,
   "summary_stats": {
     "overall": {
@@ -12,18 +12,18 @@
       "fail_rate": 0.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 1326,
-      "total_judge_llm_output_tokens": 4132,
-      "total_judge_llm_tokens": 5458,
+      "total_judge_llm_input_tokens": 972,
+      "total_judge_llm_output_tokens": 1175,
+      "total_judge_llm_tokens": 2147,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 37650,
-      "total_api_output_tokens": 910,
-      "total_api_tokens": 38560,
-      "total_tokens": 44018
+      "total_api_input_tokens": 24186,
+      "total_api_output_tokens": 716,
+      "total_api_tokens": 24902,
+      "total_tokens": 27049
     },
     "by_metric": {
       "custom:answer_correctness": {
-        "pass": 3,
+        "pass": 1,
         "fail": 0,
         "error": 0,
         "skipped": 0,
@@ -32,18 +32,51 @@
         "error_rate": 0.0,
         "skipped_rate": 0.0,
         "score_statistics": {
-          "count": 3,
+          "count": 1,
           "mean": 1.0,
           "median": 1.0,
           "std": 0.0,
           "min": 1.0,
           "max": 1.0,
-          "confidence_interval": {
-            "low": 1.0,
-            "mean": 1.0,
-            "high": 1.0,
-            "confidence_level": 95.0
-          }
+          "confidence_interval": null
+        }
+      },
+      "custom:keywords_eval": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "custom:tool_eval": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
         }
       }
     },
@@ -86,14 +119,14 @@
       }
     },
     "agent_latency_stats": {
-      "count": 3,
-      "mean": 32.273530992666565,
-      "median": 39.85266833999958,
-      "std": 15.178669043693251,
-      "min": 14.797856162000244,
-      "max": 42.17006847599987,
-      "p95": 41.93832846239984,
-      "p99": 42.12372047327986
+      "count": 1,
+      "mean": 38.61890188199868,
+      "median": 38.61890188199868,
+      "std": 0.0,
+      "min": 38.61890188199868,
+      "max": 38.61890188199868,
+      "p95": 38.61890188199868,
+      "p99": 38.61890188199868
     }
   },
   "configuration": {
@@ -106,7 +139,7 @@
       "max_tokens": 5000,
       "timeout": 300,
       "num_retries": 3,
-      "cache_enabled": false,
+      "cache_enabled": true,
       "parameters": {
         "temperature": 0.0,
         "max_completion_tokens": 5000
@@ -145,77 +178,77 @@
       "result": "PASS",
       "score": 1.0,
       "threshold": null,
-      "execution_time": 56.41871856899979,
-      "evaluation_latency": 14.248650092999924,
-      "judge_llm_input_tokens": 853,
-      "judge_llm_output_tokens": 1200,
+      "execution_time": 52.5120160439983,
+      "evaluation_latency": 13.89311416199962,
+      "judge_llm_input_tokens": 972,
+      "judge_llm_output_tokens": 1175,
       "judge_scores": [
         {
           "judge_id": "primary",
           "score": 1.0,
-          "reason": "Custom answer correctness: 1.00 - The response is perfectly correct and complete. It follows a logical troubleshooting path, starting from the high-level symptom (unhealthy application), correctly identifying the failing component (`reviews`), and then drilling down to the root cause. It precisely matches the expected response by identifying that a fault injection rule in the `ratings` VirtualService is configured to abort 100% of requests with an HTTP 503 error. The evidence provided, including the specific YAML configuration, is accurate and directly supports the conclusion.",
-          "judge_input_tokens": 853,
-          "judge_output_tokens": 1200,
+          "reason": "Custom answer correctness: 1.00 - The response is perfectly correct and comprehensive. It accurately identifies the root cause as the fault injection rule in the `ratings` VirtualService, which is configured to abort 100% of requests with an HTTP 503 error. This aligns exactly with the expected response.",
+          "judge_input_tokens": 972,
+          "judge_output_tokens": 1175,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 42.17006847599987,
+      "agent_latency": 38.61890188199868,
       "tokens_per_second": null
     },
     {
       "conversation_group_id": "fix_bookinfo_fault_injection",
       "tag": "fix_bookinfo_fault_injection",
-      "turn_id": "fix",
-      "metric_identifier": "custom:answer_correctness",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:keywords_eval",
       "result": "PASS",
       "score": 1.0,
       "threshold": null,
-      "execution_time": 62.226004943999214,
-      "evaluation_latency": 22.373336603999633,
-      "judge_llm_input_tokens": 245,
-      "judge_llm_output_tokens": 1943,
+      "execution_time": 38.618959774998075,
+      "evaluation_latency": 5.789299939351622e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
       "judge_scores": [
         {
           "judge_id": "primary",
           "score": 1.0,
-          "reason": "Custom answer correctness: 1.00 - The response is perfectly correct and aligns completely with the expected response. It correctly identifies that the fix is to remove the fault injection rule from the `ratings` VirtualService. This is functionally identical to the expected response's suggestion to \"delete the fault.abort section from the VirtualService.\"",
-          "judge_input_tokens": 245,
-          "judge_output_tokens": 1943,
+          "reason": "Keywords eval successful: Option 1 - all keywords matched: 'bookinfo', 'ratings', 'fault injection'",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 39.85266833999958,
+      "agent_latency": 38.61890188199868,
       "tokens_per_second": null
     },
     {
       "conversation_group_id": "fix_bookinfo_fault_injection",
       "tag": "fix_bookinfo_fault_injection",
-      "turn_id": "solution",
-      "metric_identifier": "custom:answer_correctness",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:tool_eval",
       "result": "PASS",
       "score": 1.0,
       "threshold": null,
-      "execution_time": 25.017065592999643,
-      "evaluation_latency": 10.219209430999399,
-      "judge_llm_input_tokens": 228,
-      "judge_llm_output_tokens": 989,
+      "execution_time": 38.619049336999524,
+      "evaluation_latency": 0.00014745500084245577,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
       "judge_scores": [
         {
           "judge_id": "primary",
           "score": 1.0,
-          "reason": "Custom answer correctness: 1.00 - The provided response correctly and directly confirms that the requested action has been completed. It explicitly states that the fault injection rule has been removed from the `ratings` VirtualService, which is the precise action required by the user's command. The response is factually accurate, complete, and perfectly aligned with the expected outcome.",
-          "judge_input_tokens": 228,
-          "judge_output_tokens": 989,
+          "reason": "Primary pattern matched: Tool calls: 2/2 expected matched, 0 unmatched: none, 4 extra in response: [kiali_get_mesh_traffic_graph, kiali_manage_istio_config, kiali_manage_istio_config_read, kiali_manage_istio_config_read] (partial, unordered)",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 14.797856162000244,
+      "agent_latency": 38.61890188199868,
       "tokens_per_second": null
     }
   ]

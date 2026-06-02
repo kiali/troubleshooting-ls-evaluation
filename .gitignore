@@ -1,6 +1,12 @@
 # Python virtual environment
 venv/
 
+.caches/
+# Evaluation results and generated reports
+# (per-scenario RESULTS.md files live inside results/ which is already ignored)
+results/
+RESULTS.md
+
 # Vector database (extracted from kiali-byok image via make setup-vector-db)
 vector_db/
 

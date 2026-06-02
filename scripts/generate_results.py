@@ -289,8 +289,8 @@ def generate_md(
     if graphs:
         lines += ["## Graphs", ""]
         for g in graphs:
-            rel = g.relative_to(output.parent)
             label = g.stem.replace(re.search(r"evaluation_\d+_\d+_?", g.stem).group(), "").replace("_", " ").strip().title()
+            rel = g.relative_to(output.parent)
             lines += [f"### {label}", "", f"![{label}]({rel})", ""]
 
     # ── Per-scenario details ───────────────────────────────────────────────────

@@ -1,0 +1,120 @@
+# Evaluation data for fix_bookinfo_fault_injection
+#
+# tool_calls: null  →  populated at runtime by the API, never pre-fill
+#
+# expected_tool_calls format:
+#   Simple (one tool):        - - tool_name: foo
+#   With alternatives:        - - - tool_name: foo   (alt1, seq1, tool1)
+#                               - - tool_name: bar   (alt1, seq2, tool1)
+#                             - - - tool_name: baz   (alt2, seq1, tool1)
+#
+# system.yaml: full_match: false (extra tool calls allowed), ordered: false
+#
+# Script paths are resolved relative to this file's location.
+
+- conversation_group_id: check_mesh_status
+  tag: check_mesh_Status
+  description: "Check the status of the mesh and identify any issues."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Check the status of the mesh and identify any issues.
+      expected_response: >
+        The agent should report the current health status of the Istio service mesh
+        by querying Kiali. It should identify the overall mesh health and list any
+        namespaces or services that are degraded, with a warning or error status,
+        or confirm that all components are healthy.
+      tool_calls: null
+      expected_tool_calls:
+        - # Agent calls kiali_get_mesh_status (no namespace argument required)
+          - - tool_name: kiali_get_mesh_status
+      expected_keywords:
+        - - bookinfo
+          - mesh
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval
+
+# Evaluation data for fix_bookinfo_fault_injection
+#
+# tool_calls: null  →  populated at runtime by the API, never pre-fill
+#
+# expected_tool_calls format:
+#   Simple (one tool):        - - tool_name: foo
+#   With alternatives:        - - - tool_name: foo   (alt1, seq1, tool1)
+#                               - - tool_name: bar   (alt1, seq2, tool1)
+#                             - - - tool_name: baz   (alt2, seq1, tool1)
+#
+# system.yaml: full_match: false (extra tool calls allowed), ordered: false
+#
+# Script paths are resolved relative to this file's location.
+
+- conversation_group_id: fix_bookinfo_fault_injection
+  tag: fix_bookinfo_fault_injection
+  description: "A fault injection aborts 100% of requests to ratings with HTTP 503. The agent must identify the Istio VirtualService fault injection as root cause."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        The Bookinfo application in the bookinfo namespace is degraded.
+        The product page shows errors for some users.
+        Investigate the Istio service mesh configuration and service health
+        to identify the root cause of the problem and fix it.
+      expected_response: >
+        The root cause is a fault injection rule in the ratings VirtualService
+        that aborts 100% of incoming requests with HTTP 503.
+        The ratings VirtualService in the bookinfo namespace contains a
+        fault.abort block configured with httpStatus 503 and percentage value 100.
+        This intentionally causes all traffic to the ratings service to fail,
+        which propagates errors to the reviews and productpage services.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: traffic graph → Istio config read
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+        - # Alternative 2: pod logs → traffic graph
+          - - tool_name: kiali_get_logs
+              arguments:
+                namespace: bookinfo
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+        - # Alternative 3: traffic graph → list configs → get VirtualService
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+                serviceName: ratings
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+      expected_keywords:
+        - - bookinfo
+          - ratings
+          - fault injection
+        - - bookinfo
+          - ratings
+          - "503"
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval
+
+  # Script paths are relative to this file's directory
+  setup_script: ./fix_bookinfo_fault_injection/setup.sh
+  cleanup_script: ./fix_bookinfo_fault_injection/cleanup.sh

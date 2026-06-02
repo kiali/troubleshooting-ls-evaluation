@@ -18,7 +18,7 @@ llm:
   max_tokens: 5000
   timeout: 300
   num_retries: 3
-  cache_enabled: false
+  cache_enabled: true
 
 # OLS API — the system under test (model must match OLSConfig, e.g. openai_lseval uses gpt-4o-mini)
 api:
@@ -43,6 +43,23 @@ metrics_metadata:
     "custom:answer_correctness":
       description: "Correctness vs expected answer using custom LLM evaluation"
       default: false
+    "custom:keywords_eval":
+      description: "Validates that keywords are used in the response"
+      default: true
+      evaluation_params:
+        - query
+        - response
+      evaluation_steps:
+        - "Step 1: Check if the response contains keywords related to the query content"
+        - "Step 2: Check if the response contains keywords related to the context"
+        - "Step 3: Check if the response contains keywords related to the tool calls"
+        - "Step 4: Check if the response contains keywords related to the expected answer"
+        
+    "custom:tool_eval":
+      description: "Validates that key tool calls were made (partial match — extra tools allowed)"
+      default: false
+      ordered: false    # don't enforce call order
+      full_match: false # allow extra tool calls beyond what is expected
 
     "geval:generic_troubleshooting_experience":
       description: "Verify if the agent is performing real evidence-based troubleshooting"
@@ -112,6 +129,8 @@ output:
     - "reason"
     - "query"
     - "response"
+    - "tool_calls"
+    - "expected_tool_calls"
     - "execution_time"
 
 # Visualization settings
@@ -119,7 +138,9 @@ visualization:
   figsize: [12, 8]
   dpi: 300
   enabled_graphs:
+    - "pass_rates"
     - "score_distribution"
+    - "conversation_heatmap"
     - "status_breakdown"
 
 # Environment Variables

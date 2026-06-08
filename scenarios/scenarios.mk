@@ -19,10 +19,11 @@ WAIT_SECONDS ?= 200   # seconds to wait after setup/cleanup for metrics to propa
 EVAL_BASE = OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
             GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \
             WAIT_SECONDS=$(WAIT_SECONDS) \
-            API_KEY=$$(oc whoami -t) \
+            API_KEY=$(_KIALI_TOKEN) \
+            KUBECTL=$(KUBECTL) \
             venv/bin/lightspeed-eval \
             --system-config system.yaml \
-			--output-dir results \
+		--output-dir results \
             --eval-data $(CONVERSATIONS)
 
 # ── clean-results: wipe all evaluation output ─────────────────────────────────

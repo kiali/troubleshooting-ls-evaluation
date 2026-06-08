@@ -17,7 +17,8 @@ Responses are scored with LLM-based metrics (`custom:answer_correctness`,
 ### 1. CRC cluster with Istio and Kiali
 
 A running [CRC (OpenShift Local)](https://developers.redhat.com/products/openshift-local)
-cluster with Istio and Kiali installed.
+cluster with Istio and Kiali installed, **or** a [kind](https://kind.sigs.k8s.io/) cluster
+(pass `CLUSTER=kind` to all `make` targets).
 
 ```bash
 crc start
@@ -27,6 +28,7 @@ oc get pods -n istio-system | grep kiali   # verify Kiali is up
 ```
 
 The default `KIALI_ENDPOINT` is already set to `https://kiali-istio-system.apps-crc.testing/`.
+When using `CLUSTER=kind` the default becomes `http://localhost:20001/` (Kiali port-forward).
 
 ### 2. Bookinfo application with traffic generation
 
@@ -112,6 +114,28 @@ into `dashboard/`. Pin to a specific version with `LSE_TAG=v0.6.0`.
 ## Running the evaluations
 
 Three terminals are needed: MCP server, OLS service, and the eval runner.
+
+### Running with kind
+
+Before starting, expose Kiali via port-forward in a background terminal:
+
+```bash
+kubectl port-forward -n istio-system svc/kiali 20001:20001 &
+```
+
+Then pass `CLUSTER=kind` to every `make` target:
+
+```bash
+make run-mcp CLUSTER=kind
+make run-ols                            # unchanged — local Podman container
+make all CLUSTER=kind
+make fix_bookinfo_fault_injection CLUSTER=kind
+```
+
+`CLUSTER=kind` automatically sets `KUBECTL=kubectl` and `KIALI_ENDPOINT=http://localhost:20001/`.
+You can still override individually: `make run-mcp CLUSTER=kind KIALI_ENDPOINT=http://my-kiali/`.
+
+---
 
 ### Terminal 1 — Kubernetes MCP server
 
@@ -233,7 +257,9 @@ Opens the dev server at **<http://localhost:5173>** with the project paths pre-c
 
 | Variable | Default | Description |
 |---|---|---|
-| `KIALI_ENDPOINT` | `https://kiali-istio-system.apps-crc.testing/` | Kiali UI/API URL |
+| `CLUSTER` | `openshift` | Cluster type: `openshift` (uses `oc`) or `kind` (uses `kubectl`) |
+| `KUBECTL` | `oc` / `kubectl` | CLI binary; set automatically from `CLUSTER`, override if needed |
+| `KIALI_ENDPOINT` | varies by `CLUSTER` | Kiali UI/API URL |
 | `OLS_IMAGE` | `quay.io/openshift-lightspeed/lightspeed-service-api:latest` | OLS image |
 | `KIALI_RAG_DB` | `quay.io/kiali/kiali-byok:latest` | BYOK image for vector DB |
 | `LSE_TAG` | `main` | Branch/tag for `make setup-dashboard` |

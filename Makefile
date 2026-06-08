@@ -16,8 +16,23 @@
 
 SHELL := /bin/bash
 
+# ── Cluster type ──────────────────────────────────────────────────────────────
+# CLUSTER=openshift  (default) — uses oc and CRC/OCP endpoints
+# CLUSTER=kind       — uses kubectl and localhost port-forwards
+CLUSTER ?= openshift
+
+ifeq ($(CLUSTER),kind)
+  KUBECTL        ?= kubectl
+  KIALI_ENDPOINT ?= http://localhost:20001/
+  # Get a short-lived token from the kiali service account
+  _KIALI_TOKEN   = $(shell kubectl -n istio-system create token kiali --duration=8h 2>/dev/null)
+else
+  KUBECTL        ?= oc
+  KIALI_ENDPOINT ?= https://kiali-istio-system.apps-crc.testing/
+  _KIALI_TOKEN   = $(shell oc whoami -t 2>/dev/null)
+endif
+
 # ── Configuration ─────────────────────────────────────────────────────────────
-KIALI_ENDPOINT    ?= https://kiali-istio-system.apps-crc.testing/
 MCP_CONFIG        ?= mcp_config.toml
 OLS_IMAGE         ?= quay.io/openshift-lightspeed/lightspeed-service-api:latest
 KIALI_RAG_VERSION ?= latest
@@ -37,7 +52,7 @@ include scenarios/scenarios.mk
 # ── Environment guards ─────────────────────────────────────────────────────────
 
 check-bookinfo:
-	@oc get pods -n bookinfo --no-headers 2>/dev/null | grep -q "Running" || \
+	@$(KUBECTL) get pods -n bookinfo --no-headers 2>/dev/null | grep -q "Running" || \
 	  (printf '\033[0;31mERROR:\033[0m Bookinfo is not running in namespace "bookinfo".\n'; \
 	   printf '  Deploy it: ./install-bookinfo-demo.sh -tg true\n'; exit 1)
 
@@ -66,10 +81,16 @@ check-venv:
 venv/bin/activate:
 	@command -v python3 >/dev/null 2>&1 || \
 	  (printf '\033[0;31mERROR:\033[0m python3 not found in PATH.\n'; exit 1)
-	@python3 -c "import sys; sys.exit(0) if sys.version_info >= (3,11) else sys.exit(1)" || \
-	  (printf '\033[0;31mERROR:\033[0m python3 >= 3.11 required (found %s).\n' \
-	          "$$(python3 --version 2>&1)"; exit 1)
-	python3 -m venv venv
+	@# lightspeed-evaluation requires Python >=3.11,<3.14 — prefer 3.13/3.12/3.11
+	$(eval PYTHON := $(shell \
+	  for v in python3.13 python3.12 python3.11; do \
+	    command -v $$v 2>/dev/null && break; \
+	  done))
+	@[ -n "$(PYTHON)" ] || \
+	  (printf '\033[0;31mERROR:\033[0m Python 3.11–3.13 required (lightspeed-evaluation does not support 3.14+).\n'; \
+	   printf '  Install with: sudo dnf install python3.13\n'; exit 1)
+	@printf 'Using %s\n' "$(PYTHON)"
+	$(PYTHON) -m venv venv
 	venv/bin/pip install git+https://github.com/lightspeed-core/lightspeed-evaluation.git
 
 setup: venv/bin/activate
@@ -103,7 +124,7 @@ run-dashboard:
 	  LS_EVAL_DASHBOARD_RUN_ENABLED=true \
 	  OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
 	  GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \
-	  API_KEY=$$(oc whoami -t) \
+	  API_KEY=$(_KIALI_TOKEN) \
 	  npx vite
 
 setup-vector-db:

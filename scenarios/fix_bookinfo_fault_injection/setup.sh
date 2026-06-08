@@ -4,31 +4,32 @@ set -euo pipefail
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
 NAMESPACE="bookinfo"
 WAIT_SECONDS=${WAIT_SECONDS:-180}  # override with: make all WAIT_SECONDS=60
+KUBECTL="${KUBECTL:-oc}"
 
 # ── Clean pre-existing ratings Istio resources ────────────────────────────────
 # Removes leftover resources — including any AuthorizationPolicies created by a
 # previous agent run — so the agent starts with a clean slate each time.
 echo "Removing existing ratings Istio resources…"
-oc delete virtualservice     ratings                  -n "$NAMESPACE" --ignore-not-found
-oc delete destinationrule    ratings                  -n "$NAMESPACE" --ignore-not-found
-oc delete peerauthentication ratings-permissive-mtls  -n "$NAMESPACE" --ignore-not-found
+$KUBECTL delete virtualservice     ratings                  -n "$NAMESPACE" --ignore-not-found
+$KUBECTL delete destinationrule    ratings                  -n "$NAMESPACE" --ignore-not-found
+$KUBECTL delete peerauthentication ratings-permissive-mtls  -n "$NAMESPACE" --ignore-not-found
 # Remove AuthorizationPolicies targeting ratings that a previous agent may have created
-oc delete authorizationpolicy allow-reviews-to-ratings  -n "$NAMESPACE" --ignore-not-found || true
-oc delete authorizationpolicy ratings-viewer             -n "$NAMESPACE" --ignore-not-found || true
-oc get authorizationpolicy -n "$NAMESPACE" --no-headers 2>/dev/null \
+$KUBECTL delete authorizationpolicy allow-reviews-to-ratings  -n "$NAMESPACE" --ignore-not-found || true
+$KUBECTL delete authorizationpolicy ratings-viewer             -n "$NAMESPACE" --ignore-not-found || true
+$KUBECTL get authorizationpolicy -n "$NAMESPACE" --no-headers 2>/dev/null \
   | grep -i ratings | awk '{print $1}' \
-  | xargs -r oc delete authorizationpolicy -n "$NAMESPACE" --ignore-not-found || true
+  | xargs -r $KUBECTL delete authorizationpolicy -n "$NAMESPACE" --ignore-not-found || true
 sleep 5   # allow Istio to propagate the deletions
 
 # ── Apply the fault injection manifests ───────────────────────────────────────
 echo "Applying fault injection manifests…"
-oc apply -f "$FIXTURE_DIR/manifests.yaml"
+$KUBECTL apply -f "$FIXTURE_DIR/manifests.yaml"
 
 # Verify the VirtualService was accepted
 ATTEMPT=0
 until [ "$ATTEMPT" -ge 10 ]; do
   ATTEMPT=$((ATTEMPT + 1))
-  VS=$(oc get virtualservice ratings -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  VS=$($KUBECTL get virtualservice ratings -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
   if [ "$VS" -ge 1 ]; then
     echo "VirtualService ratings is active in namespace $NAMESPACE"
     break

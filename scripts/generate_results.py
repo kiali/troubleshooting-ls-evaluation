@@ -273,7 +273,7 @@ def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
         desc_suffix = f" — {desc}" if desc else ""
         lines += [
             "<details>",
-            f"<summary><b>{icon} {run.gid}</b> — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_suffix}</summary>",
+            f"<summary>{icon} {run.gid} — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_suffix}</summary>",
             "",
         ]
 

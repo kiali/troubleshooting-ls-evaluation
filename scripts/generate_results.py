@@ -186,7 +186,153 @@ def fmt_tool_calls(tool_calls: list) -> list[str]:
     return lines
 
 
-# ── Markdown generation ───────────────────────────────────────────────────────
+# ── Per-scenario detail page ──────────────────────────────────────────────────
+
+def generate_scenario_md(run: ConvRun, sc: dict, output: Path) -> None:
+    """Write a full detail page for one conversation to results/<name>.md."""
+    s_overall = run.summary.get("summary_stats", {}).get("overall", {})
+    tot = s_overall.get("TOTAL", 0)
+    p = s_overall.get("PASS", 0)
+    f = s_overall.get("FAIL", 0)
+    e = s_overall.get("ERROR", 0)
+    rate = f"{p/tot*100:.0f}%" if tot else "—"
+    icon = "✅" if f + e == 0 else "❌"
+    desc = sc.get("_description", "")
+
+    lines: list[str] = [
+        f"# {icon} {run.gid}",
+        "",
+        f"**Run:** {run.timestamp} &nbsp;|&nbsp; "
+        f"**Evaluations:** {tot} &nbsp;|&nbsp; "
+        f"✅ {p} PASS &nbsp; ❌ {f} FAIL &nbsp; ⚠️ {e} ERROR &nbsp; ({rate})",
+    ]
+    if desc:
+        lines += ["", f"> {desc}"]
+    lines += ["", "---", ""]
+
+    # Graphs
+    graphs = run.graphs
+    primary_key = next((k for k in ["pass_rates", "status_breakdown"] if k in graphs), None)
+    if primary_key:
+        g = graphs[primary_key]
+        label = primary_key.replace("_", " ").title()
+        rel = g.relative_to(output.parent)
+        lines += [f"## {label}", "", f"![{label}]({rel})", ""]
+    other_graphs = {k: v for k, v in graphs.items() if k != primary_key}
+    if other_graphs:
+        lines += ["<details>", "<summary>More graphs</summary>", ""]
+        for key, g in sorted(other_graphs.items()):
+            label = key.replace("_", " ").title()
+            rel = g.relative_to(output.parent)
+            lines += [f"### {label}", "", f"![{label}]({rel})", ""]
+        lines += ["</details>", ""]
+
+    # Metrics table
+    lines += ["## Metrics", ""]
+    lines += ["| Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |", "|---|---|---|---|---|---|"]
+    for metric, s in run.summary.get("summary_stats", {}).get("by_metric", {}).items():
+        tot_m = s.get("pass", 0) + s.get("fail", 0) + s.get("error", 0)
+        rate_m = s.get("pass", 0) / tot_m * 100 if tot_m else 0
+        icon_m = "✅" if rate_m == 100 else ("❌" if rate_m == 0 else "🟡")
+        mean = s.get("score_statistics", {}).get("mean", "")
+        mean_str = f"{float(mean):.2f}" if mean != "" else "—"
+        lines.append(
+            f"| `{metric}` | {s.get('pass',0)} | {s.get('fail',0)} | "
+            f"{s.get('error',0)} | {icon_m} {rate_m:.0f}% | {mean_str} |"
+        )
+    lines.append("")
+
+    # Turns
+    lines += ["## Turns", ""]
+    turns: dict = defaultdict(list)
+    for row in run.rows:
+        turns[row.get("turn_id", "")].append(row)
+
+    for tid, turn_rows in turns.items():
+        turn_sc = sc.get(tid, {})
+        query = turn_sc.get("query", "")
+        expected = turn_sc.get("expected_response", "")
+        expected_kw = turn_sc.get("expected_keywords", [])
+        expected_tc = turn_sc.get("expected_tool_calls", [])
+        turn_metrics = turn_sc.get("turn_metrics", [])
+
+        actual_tc_raw = next((r.get("tool_calls", "") for r in turn_rows if r.get("tool_calls")), "")
+        actual_tc = json.loads(actual_tc_raw) if actual_tc_raw else []
+        response = turn_rows[0].get("response", "").strip()
+        metrics_str = " · ".join(f"`{m}`" for m in turn_metrics) if turn_metrics else ""
+
+        lines += [f"### Turn: `{tid}`", ""]
+        if metrics_str:
+            lines += [f"**Metrics:** {metrics_str}", ""]
+        if query:
+            lines += [f"**Query:** {query}", ""]
+
+        lines += ["| Metric | Result | Score |", "|---|---|---|"]
+        for row in turn_rows:
+            lines.append(
+                f"| `{row.get('metric_identifier','')}` | "
+                f"{result_emoji(row.get('result',''))} {row.get('result','')} | "
+                f"{score_bar(row.get('score',''))} |"
+            )
+        lines.append("")
+
+        failures = [r for r in turn_rows if r.get("result") != "PASS"]
+        if failures:
+            lines += ["<details>", "<summary>Judge reasons (failures)</summary>", ""]
+            for row in failures:
+                js = row.get("judge_scores") or []
+                reason = (js[0].get("reason", "") if js else row.get("reason", ""))[:350]
+                if reason:
+                    lines += [f"**`{row.get('metric_identifier','')}`:** {reason}", ""]
+            lines += ["</details>", ""]
+
+        if expected_kw or expected_tc:
+            lines += ["<details>", "<summary>Expected signals</summary>", ""]
+            if expected_kw:
+                lines += ["**Keywords:**  ", fmt_keywords(expected_kw), ""]
+            if expected_tc:
+                lines += ["**Tool calls:**", ""] + fmt_tool_calls(expected_tc)
+            lines += ["</details>", ""]
+
+        if actual_tc:
+            lines += ["<details>", "<summary>Actual tool calls</summary>", ""]
+            lines += fmt_tool_calls(actual_tc)
+            lines += ["</details>", ""]
+
+        if response:
+            truncated = response[:1000] + ("…" if len(response) > 1000 else "")
+            lines += [
+                "<details>", "<summary>Agent response</summary>", "",
+                "```", truncated, "```", "", "</details>", "",
+            ]
+
+        if expected:
+            lines += [
+                "<details>", "<summary>Expected response</summary>", "",
+                expected, "", "</details>", "",
+            ]
+
+    lat = run.summary.get("summary_stats", {}).get("agent_latency_stats", {})
+    o = s_overall
+    lines += [
+        "---",
+        "",
+        f"*Tokens — Judge: {o.get('total_judge_llm_tokens',0):,} | "
+        f"API: {o.get('total_api_tokens',0):,} | "
+        f"Total: {o.get('total_tokens',0):,}*",
+    ]
+    if lat:
+        lines.append(
+            f"*Latency — mean: {lat.get('mean',0):.1f}s | "
+            f"median: {lat.get('median',0):.1f}s | "
+            f"p95: {lat.get('p95',0):.1f}s*"
+        )
+
+    output.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  ✓ {output.name}")
+
+
+# ── Root summary page ─────────────────────────────────────────────────────────
 
 def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
     if not runs:
@@ -259,131 +405,22 @@ def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
         )
     lines.append("")
 
-    # ── Per-conversation sections ─────────────────────────────────────────────
+    # ── Links to per-scenario detail pages ───────────────────────────────────
     lines += ["## Scenario Details", ""]
-
     for run in runs:
         sc = scenarios.get(run.gid, {})
-        desc = sc.get("_description", "")
         s = conv_stats[run.gid]
         tot = s["total"]
         rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
         icon = "✅" if s["fail"] + s["error"] == 0 else "❌"
-
-        desc_suffix = f" — {desc}" if desc else ""
-        lines += [
-            "<details>",
-            f"<summary>{icon} {run.gid} — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_suffix}</summary>",
-            "",
-        ]
-
-        # Graphs (collapsed inside each conversation)
-        graphs = run.graphs
-        primary_key = next((k for k in ["pass_rates", "status_breakdown"] if k in graphs), None)
-        if graphs:
-            lines += ["<details>", "<summary>📊 Graphs</summary>", ""]
-            for key, g in sorted(graphs.items()):
-                label = key.replace("_", " ").title()
-                rel = g.relative_to(output.parent)
-                lines += [f"**{label}**", "", f"![{label}]({rel})", ""]
-            lines += ["</details>", ""]
-
-        # Token usage (collapsed)
-        o = run.summary.get("summary_stats", {}).get("overall", {})
-        lat = run.summary.get("summary_stats", {}).get("agent_latency_stats", {})
-        lines += [
-            "<details>",
-            "<summary>⚙️ Tokens &amp; latency</summary>",
-            "",
-            f"Judge: {o.get('total_judge_llm_tokens',0):,} tokens &nbsp;|&nbsp; "
-            f"API: {o.get('total_api_tokens',0):,} tokens &nbsp;|&nbsp; "
-            f"Total: {o.get('total_tokens',0):,} tokens",
-        ]
-        if lat:
-            lines.append(
-                f"Latency — mean: {lat.get('mean',0):.1f}s &nbsp; "
-                f"median: {lat.get('median',0):.1f}s &nbsp; "
-                f"p95: {lat.get('p95',0):.1f}s"
-            )
-        lines += ["", "</details>", ""]
-
-        # Turns
-        turns: dict = defaultdict(list)
-        for row in run.rows:
-            turns[row.get("turn_id", "")].append(row)
-
-        for tid, turn_rows in turns.items():
-            turn_sc = sc.get(tid, {})
-            query = turn_sc.get("query", "")
-            expected = turn_sc.get("expected_response", "")
-            expected_kw = turn_sc.get("expected_keywords", [])
-            expected_tc = turn_sc.get("expected_tool_calls", [])
-            turn_metrics = turn_sc.get("turn_metrics", [])
-
-            actual_tc_raw = next((r.get("tool_calls", "") for r in turn_rows if r.get("tool_calls")), "")
-            actual_tc = json.loads(actual_tc_raw) if actual_tc_raw else []
-            response = turn_rows[0].get("response", "").strip()
-            metrics_str = " · ".join(f"`{m}`" for m in turn_metrics) if turn_metrics else ""
-
-            lines += [f"### Turn: `{tid}`", ""]
-            if metrics_str:
-                lines += [f"**Metrics:** {metrics_str}", ""]
-            if query:
-                lines += [f"**Query:** {query}", ""]
-
-            lines += ["| Metric | Result | Score |", "|---|---|---|"]
-            for row in turn_rows:
-                lines.append(
-                    f"| `{row.get('metric_identifier','')}` | "
-                    f"{result_emoji(row.get('result',''))} {row.get('result','')} | "
-                    f"{score_bar(row.get('score',''))} |"
-                )
-            lines.append("")
-
-            # Judge reasons (failures only)
-            failures = [r for r in turn_rows if r.get("result") != "PASS"]
-            if failures:
-                lines += ["<details>", "<summary>Judge reasons (failures)</summary>", ""]
-                for row in failures:
-                    js = row.get("judge_scores") or []
-                    reason = (js[0].get("reason", "") if js else row.get("reason", ""))[:300]
-                    if reason:
-                        lines += [f"**`{row.get('metric_identifier','')}`:** {reason}", ""]
-                lines += ["</details>", ""]
-
-            # Expected signals
-            if expected_kw or expected_tc:
-                lines += ["<details>", "<summary>Expected signals</summary>", ""]
-                if expected_kw:
-                    lines += ["**Keywords:**  ", fmt_keywords(expected_kw), ""]
-                if expected_tc:
-                    lines += ["**Tool calls:**", ""] + fmt_tool_calls(expected_tc)
-                lines += ["</details>", ""]
-
-            # Actual tool calls
-            if actual_tc:
-                lines += ["<details>", "<summary>Actual tool calls</summary>", ""]
-                lines += fmt_tool_calls(actual_tc)
-                lines += ["</details>", ""]
-
-            # Agent response
-            if response:
-                truncated = response[:1000] + ("…" if len(response) > 1000 else "")
-                lines += [
-                    "<details>", "<summary>Agent response</summary>", "",
-                    "```", truncated, "```", "", "</details>", "",
-                ]
-
-            # Expected response
-            if expected:
-                lines += [
-                    "<details>", "<summary>Expected response</summary>", "",
-                    expected, "", "</details>", "",
-                ]
-
-        lines += ["</details>", ""]
-
-    lines += ["*Generated by `scripts/generate_results.py`*"]
+        desc = sc.get("_description", "")
+        detail_link = f"results/{run.gid}.md"
+        desc_str = f" — {desc}" if desc else ""
+        lines.append(
+            f"- [{icon} **{run.gid}**]({detail_link})"
+            f" — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_str}"
+        )
+    lines += ["", "*Generated by `scripts/generate_results.py`*"]
     output.write_text("\n".join(lines), encoding="utf-8")
     print(f"✓ RESULTS.md written to {output}")
 
@@ -420,6 +457,14 @@ def main() -> None:
                 if ef.exists():
                     all_scenarios.update(load_scenarios(ef))
 
+    # Generate per-scenario detail pages inside results/
+    print("Generating scenario detail pages:")
+    for run in runs:
+        sc = all_scenarios.get(run.gid, {})
+        detail_output = results_dir / f"{run.gid}.md"
+        generate_scenario_md(run, sc, detail_output)
+
+    # Generate root summary RESULTS.md
     generate_md(runs, all_scenarios, output)
 
 

@@ -1,4 +1,4 @@
-# Evaluation data for fix_bookinfo_fault_injection
+# Evaluation conversations for Kiali + LightSpeed troubleshooting evaluation.
 #
 # tool_calls: null  →  populated at runtime by the API, never pre-fill
 #
@@ -9,87 +9,221 @@
 #                             - - - tool_name: baz   (alt2, seq1, tool1)
 #
 # system.yaml: full_match: false (extra tool calls allowed), ordered: false
-#
 # Script paths are resolved relative to this file's location.
 
-- conversation_group_id: check_mesh_status
-  tag: check_mesh_Status
-  description: "Check the status of the mesh and identify any issues."
+
+# ── fix_bookinfo_routing ──────────────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_routing
+  tag: fix_bookinfo_routing
+  description: "Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity       # agent references findings across turns
+    - deepeval:conversation_relevancy        # agent stays on-topic throughout
+    - deepeval:knowledge_retention           # agent remembers evidence from earlier turns
+    - deepeval:conversation_completeness     # user's intent (investigate + fix) was fully addressed
 
   turns:
-    - turn_id: diagnose
+    - turn_id: investigate
       query: >
-        Check the status of the mesh and identify any issues.
+        In our Bookinfo app, the product page only ever shows black or no stars —
+        it never shows red stars. Can you investigate and tell me what you find?
+        Please only report for now, do not make any changes yet.
       expected_response: >
-        The agent should report the current health status of the Istio service mesh
-        by querying Kiali. It should identify the overall mesh health and list any
-        namespaces or services that are degraded, with a warning or error status,
-        or confirm that all components are healthy.
+        The agent should investigate and report that reviews-v3 (which shows red stars)
+        is not receiving any traffic. It should identify that the traffic graph or
+        service mesh configuration shows no requests going to reviews-v3, while
+        reviews-v1 and reviews-v2 are active.
       tool_calls: null
       expected_tool_calls:
-        - # Agent calls kiali_get_mesh_status (no namespace argument required)
+        - # Alternative 1: traffic graph
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+        - # Alternative 2: mesh status
           - - tool_name: kiali_get_mesh_status
+        - # Alternative 3: list Istio configs
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+        - # Alternative 4: get reviews VirtualService directly
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                action: get
+                group: networking.istio.io
+                kind: VirtualService
+                namespace: bookinfo
+                version: v1
+                object: reviews
       expected_keywords:
-        - - bookinfo
-          - mesh
+        - - reviews
+          - v3
+          - traffic
+        - - reviews
+          - v3
+          - routing
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: diagnose
+      query: >
+        What is the exact root cause? Can you check the Istio routing configuration
+        for the reviews service in the bookinfo namespace?
+      expected_response: >
+        The root cause is a VirtualService named reviews in the bookinfo namespace
+        that sets the traffic weight for reviews-v3 to 0. The VirtualService routes
+        50% of traffic to reviews-v1 and 50% to reviews-v2, leaving reviews-v3 with
+        a weight of 0 so it receives no requests.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: list then get VirtualService
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+                serviceName: reviews
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: reviews
+                group: networking.istio.io
+                version: v1
+        - # Alternative 2: get VirtualService directly
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: reviews
+                group: networking.istio.io
+                version: v1
+        - # Alternative 3: list in bookinfo (agent may omit serviceName)
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+      expected_keywords:
+        - - reviews
+          - v3
+          - weight
+          - "0"
+        - - reviews
+          - v3
+          - VirtualService
+          - routing
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
         - custom:tool_eval
 
-# Evaluation data for fix_bookinfo_fault_injection
-#
-# tool_calls: null  →  populated at runtime by the API, never pre-fill
-#
-# expected_tool_calls format:
-#   Simple (one tool):        - - tool_name: foo
-#   With alternatives:        - - - tool_name: foo   (alt1, seq1, tool1)
-#                               - - tool_name: bar   (alt1, seq2, tool1)
-#                             - - - tool_name: baz   (alt2, seq1, tool1)
-#
-# system.yaml: full_match: false (extra tool calls allowed), ordered: false
-#
-# Script paths are resolved relative to this file's location.
-
-- conversation_group_id: fix_bookinfo_fault_injection
-  tag: fix_bookinfo_fault_injection
-  description: "A fault injection aborts 100% of requests to ratings with HTTP 503. The agent must identify the Istio VirtualService fault injection as root cause."
-
-  turns:
-    - turn_id: diagnose
+    - turn_id: fix
       query: >
-        The Bookinfo application in the bookinfo namespace is degraded.
-        The product page shows errors for some users.
-        Investigate the Istio service mesh configuration and service health
-        to identify the root cause of the problem and fix it.
+        Got it. Can you fix the routing so all three versions get equal traffic?
       expected_response: >
-        The root cause is a fault injection rule in the ratings VirtualService
-        that aborts 100% of incoming requests with HTTP 503.
-        The ratings VirtualService in the bookinfo namespace contains a
-        fault.abort block configured with httpStatus 503 and percentage value 100.
-        This intentionally causes all traffic to the ratings service to fail,
-        which propagates errors to the reviews and productpage services.
+        The agent should update the reviews VirtualService to distribute traffic
+        equally across all three versions, setting each weight to approximately 33%.
       tool_calls: null
       expected_tool_calls:
-        - # Alternative 1: traffic graph → Istio config read
+        - - tool_name: kiali_manage_istio_config
+            arguments:
+              namespace: bookinfo
+              action: patch
+              kind: VirtualService
+              object: reviews
+              group: networking.istio.io
+              version: v1
+              data: ".*"
+      expected_keywords:
+        - - reviews
+          - v3
+          - weight
+        - - reviews
+          - v3
+          - traffic
+        - - reviews
+          - fixed
+          - routing
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+  setup_script: ./fix_bookinfo_routing/setup.sh
+  cleanup_script: ./fix_bookinfo_routing/cleanup.sh
+
+
+# ── check_mesh_status ─────────────────────────────────────────────────────────
+- conversation_group_id: check_mesh_status
+  tag: healthy_env
+  description: "Single-turn health check: agent reports the overall mesh and service health."
+
+  turns:
+    - turn_id: health_check
+      query: >
+        Can you check the health of the Bookinfo services and the service mesh?
+        Let me know if anything looks degraded or unhealthy.
+      expected_response: >
+        The agent should report the current health status of the Istio service mesh
+        by querying Kiali. It should identify the overall mesh health and list any
+        namespaces or services that are degraded or in error state, or confirm that
+        all components are healthy.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: mesh status tool
+          - - tool_name: kiali_get_mesh_status
+        - # Alternative 2: traffic graph (agent may use this for health overview)
           - - tool_name: kiali_get_mesh_traffic_graph
               arguments:
                 namespaces: bookinfo
-          - - tool_name: kiali_manage_istio_config_read
+      expected_keywords:
+        - - bookinfo
+        - - healthy
+        - - bookinfo
+          - service
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval
+
+# ── fix_bookinfo_fault_injection ──────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_fault_injection
+  tag: fault_injection_bookinfo
+  description: "Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity       # agent references findings across turns
+    - deepeval:conversation_relevancy        # agent stays on-topic throughout
+    - deepeval:knowledge_retention           # agent remembers evidence from earlier turns
+    - deepeval:conversation_completeness     # user's intent (diagnose + fix) was fully addressed
+
+  turns:
+    - turn_id: investigate
+      query: >
+        Some users are seeing errors on the Bookinfo product page — it looks like
+        the ratings service is broken. All pods are running and mTLS / auth policies
+        are not the issue. Can you check the Istio VirtualService routing rules
+        for the ratings service and find what's causing the problem?
+      expected_response: >
+        The agent should investigate the Bookinfo application and report that the
+        ratings service is returning errors (HTTP 503). It should identify symptoms
+        such as failed requests from the reviews service to ratings, error rates
+        visible in the traffic graph, or error messages in pod logs.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: traffic graph first
+          - - tool_name: kiali_get_mesh_traffic_graph
               arguments:
-                namespace: bookinfo
-                action: list
-        - # Alternative 2: pod logs → traffic graph
+                namespaces: bookinfo
+        - # Alternative 2: logs first
           - - tool_name: kiali_get_logs
               arguments:
                 namespace: bookinfo
-          - - tool_name: kiali_get_mesh_traffic_graph
-              arguments:
-                namespaces: bookinfo
-        - # Alternative 3: traffic graph → list configs → get VirtualService
-          - - tool_name: kiali_get_mesh_traffic_graph
-              arguments:
-                namespaces: bookinfo
+        - # Alternative 3: mesh status
+          - - tool_name: kiali_get_mesh_status
+        - # Alternative 4: direct config reads (agent goes straight to ratings VirtualService)
           - - tool_name: kiali_manage_istio_config_read
               arguments:
                 namespace: bookinfo
@@ -106,7 +240,7 @@
       expected_keywords:
         - - bookinfo
           - ratings
-          - fault injection
+          - error
         - - bookinfo
           - ratings
           - "503"
@@ -115,6 +249,89 @@
         - custom:keywords_eval
         - custom:tool_eval
 
-  # Script paths are relative to this file's directory
+    - turn_id: root_cause
+      query: >
+        Can you identify the specific root cause?
+      expected_response: >
+        The root cause is a fault injection rule in the ratings VirtualService that
+        aborts 100% of requests with HTTP 503. The ratings VirtualService in the
+        bookinfo namespace contains a fault.abort block configured with httpStatus 503
+        and percentage value 100. The agent may explore other potential causes before
+        arriving at this conclusion. What matters is that the final diagnosis correctly
+        identifies the fault.abort configuration in the ratings VirtualService.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: read VirtualService config
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+        - # Alternative 2: list then get
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+      expected_keywords:
+        - - fault injection
+          - ratings
+          - VirtualService
+        - - "503"
+          - ratings
+          - VirtualService
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: fix
+      query: >
+        Please fix it.
+      expected_response: >
+        The agent should remove the fault injection rule from the ratings VirtualService,
+        either by patching it to remove the fault.abort block or by deleting the
+        VirtualService if it was created solely for the fault injection.
+      tool_calls: null   # populated at runtime by the API
+      expected_tool_calls:
+        - # Alternative 1: patch to remove fault injection
+          - - tool_name: kiali_manage_istio_config
+              arguments:
+                namespace: bookinfo
+                action: patch
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+                data: ".*"
+        - # Alternative 2: delete the VirtualService
+          - - tool_name: kiali_manage_istio_config
+              arguments:
+                namespace: bookinfo
+                action: delete
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+      expected_keywords:
+        - - removed
+          - ratings
+        - - VirtualService
+          - ratings
+        - - fixed
+          - ratings
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
   setup_script: ./fix_bookinfo_fault_injection/setup.sh
   cleanup_script: ./fix_bookinfo_fault_injection/cleanup.sh

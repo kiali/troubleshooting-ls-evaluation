@@ -270,10 +270,10 @@ def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
         rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
         icon = "✅" if s["fail"] + s["error"] == 0 else "❌"
 
+        desc_suffix = f" — {desc}" if desc else ""
         lines += [
             "<details>",
-            f"<summary><b>{icon} {run.gid}</b> — {rate} ({s['pass']}/{tot}) — {run.timestamp}"
-            + (f"  \n{desc}" if desc else "") + "</summary>",
+            f"<summary><b>{icon} {run.gid}</b> — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_suffix}</summary>",
             "",
         ]
 

@@ -2,13 +2,15 @@
 """
 generate_results.py
 
-Reads the latest evaluation output from results/ and generates RESULTS.md
-in the project root. Correlates CSV/JSON results with scenario_evals.yaml
-to show queries, expected responses, tool calls, keywords, and actual scores.
+Each evaluation run produces one CSV + JSON pair (same timestamp).
+The conversation_group_id column in the CSV identifies the conversation.
+Multiple runs → multiple pairs → this script merges them all.
 
-Usage:
-    python scripts/generate_results.py
-    python scripts/generate_results.py --results-dir results --output RESULTS.md
+Structure of RESULTS.md:
+  - Header with aggregate stats
+  - Summary table (one row per conversation)
+  - Metrics breakdown (aggregated)
+  - Per-conversation collapsible sections (each with its own graphs)
 """
 
 import argparse
@@ -17,69 +19,16 @@ import json
 import re
 import sys
 from pathlib import Path
+from collections import defaultdict
 
 try:
     import yaml
 except ImportError:
-    print("ERROR: PyYAML is required. Run: pip install pyyaml", file=sys.stderr)
+    print("ERROR: PyYAML required. Run: pip install pyyaml", file=sys.stderr)
     sys.exit(1)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def find_latest_run(results_dir: Path) -> tuple[Path, Path]:
-    """
-    Find the latest CSV/JSON pair. Searches:
-      1. results/<scenario>/evaluation_*.csv   (per-scenario subdirs from make all)
-      2. results/evaluation_*.csv              (flat layout from individual targets)
-    Returns the most recent pair across all locations.
-    """
-    csvs = sorted(results_dir.rglob("evaluation_*_detailed.csv"), reverse=True)
-    jsons = sorted(results_dir.rglob("evaluation_*_summary.json"), reverse=True)
-    if not csvs or not jsons:
-        print(f"ERROR: No evaluation results found under {results_dir}", file=sys.stderr)
-        sys.exit(1)
-    # Pair by matching timestamp prefix
-    latest_csv = csvs[0]
-    stem = re.search(r"(evaluation_\d+_\d+)", latest_csv.name)
-    prefix = stem.group(1) if stem else ""
-    paired_json = next(
-        (j for j in jsons if prefix and prefix in j.name),
-        jsons[0],
-    )
-    return latest_csv, paired_json
-
-
-def find_all_runs(results_dir: Path) -> list[tuple[str, Path, Path]]:
-    """
-    Return all (scenario_name, csv, json) tuples.
-
-    Layout A — per-scenario subdirs (make <scenario> targets):
-        results/<name>/evaluation_*_detailed.csv
-
-    Layout B — flat (make all with conversations.yaml):
-        results/evaluation_*_detailed.csv
-        → returned as ("", csv, json) — no subdir name needed
-    """
-    pairs: list[tuple[str, Path, Path]] = []
-
-    for subdir in sorted(results_dir.iterdir()):
-        if not subdir.is_dir() or subdir.name == "graphs":
-            continue
-        csvs = sorted(subdir.glob("evaluation_*_detailed.csv"), reverse=True)
-        jsons = sorted(subdir.glob("evaluation_*_summary.json"), reverse=True)
-        if csvs and jsons:
-            pairs.append((subdir.name, csvs[0], jsons[0]))
-
-    # Flat fallback — all conversations in one run
-    if not pairs:
-        csvs = sorted(results_dir.glob("evaluation_*_detailed.csv"), reverse=True)
-        jsons = sorted(results_dir.glob("evaluation_*_summary.json"), reverse=True)
-        if csvs and jsons:
-            pairs.append(("", csvs[0], jsons[0]))
-
-    return pairs
-
+# ── Data loading ──────────────────────────────────────────────────────────────
 
 def extract_timestamp(path: Path) -> str:
     m = re.search(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})", path.name)
@@ -89,39 +38,9 @@ def extract_timestamp(path: Path) -> str:
     return path.name
 
 
-def find_graphs(csv_path: Path) -> list[Path]:
-    """Find graphs in the same directory tree as the CSV."""
-    stem = re.search(r"(evaluation_\d+_\d+)", csv_path.name)
-    prefix = stem.group(1) if stem else "evaluation_"
-    graphs_dir = csv_path.parent / "graphs"
-    return sorted(graphs_dir.glob(f"{prefix}*.png"))
-
-
-def load_scenarios(scenario_file: Path) -> dict:
-    """Load scenario_evals.yaml — returns nested dict keyed by (conv_id, turn_id)."""
-    scenarios: dict = {}
-    if not scenario_file.exists():
-        return scenarios
-    with scenario_file.open() as f:
-        docs = yaml.safe_load(f)
-    if not docs:
-        return scenarios
-    for conv in docs:
-        gid = conv.get("conversation_group_id", "")
-        scenarios[gid] = {
-            "_description": conv.get("description", ""),
-            "_tag": conv.get("tag", ""),
-        }
-        for turn in conv.get("turns", []):
-            tid = turn.get("turn_id", "")
-            scenarios[gid][tid] = {
-                "query": (turn.get("query") or "").strip(),
-                "expected_response": (turn.get("expected_response") or "").strip(),
-                "expected_keywords": turn.get("expected_keywords") or [],
-                "expected_tool_calls": turn.get("expected_tool_calls") or [],
-                "turn_metrics": turn.get("turn_metrics", []),
-            }
-    return scenarios
+def extract_prefix(path: Path) -> str:
+    m = re.search(r"(evaluation_\d+_\d+)", path.name)
+    return m.group(1) if m else ""
 
 
 def load_csv(csv_path: Path) -> list[dict]:
@@ -134,11 +53,85 @@ def load_json(json_path: Path) -> dict:
         return json.load(f)
 
 
+def load_scenarios(scenario_file: Path) -> dict:
+    scenarios: dict = {}
+    if not scenario_file.exists():
+        return scenarios
+    docs = yaml.safe_load(scenario_file.read_text())
+    if not docs:
+        return scenarios
+    for conv in docs:
+        gid = conv.get("conversation_group_id", "")
+        scenarios[gid] = {"_description": conv.get("description", ""), "_tag": conv.get("tag", "")}
+        for turn in conv.get("turns", []):
+            tid = turn.get("turn_id", "")
+            scenarios[gid][tid] = {
+                "query": (turn.get("query") or "").strip(),
+                "expected_response": (turn.get("expected_response") or "").strip(),
+                "expected_keywords": turn.get("expected_keywords") or [],
+                "expected_tool_calls": turn.get("expected_tool_calls") or [],
+                "turn_metrics": turn.get("turn_metrics", []),
+            }
+    return scenarios
+
+
+# ── Run discovery ─────────────────────────────────────────────────────────────
+
+class ConvRun:
+    """One CSV+JSON+graphs bundle representing a single evaluated conversation."""
+    def __init__(self, csv_path: Path, json_path: Path):
+        self.csv_path = csv_path
+        self.json_path = json_path
+        self.prefix = extract_prefix(csv_path)
+        self.timestamp = extract_timestamp(csv_path)
+        self.rows = load_csv(csv_path)
+        self.summary = load_json(json_path)
+        self.gid = self.rows[0].get("conversation_group_id", "?") if self.rows else "?"
+
+    @property
+    def graphs(self) -> dict[str, Path]:
+        result = {}
+        graphs_dir = self.csv_path.parent / "graphs"
+        for g in sorted(graphs_dir.glob(f"{self.prefix}*.png")):
+            m = re.search(r"evaluation_\d+_\d+_(.*?)\.png$", g.name)
+            if m:
+                result[m.group(1)] = g
+        return result
+
+
+def find_all_runs(results_dir: Path) -> list[ConvRun]:
+    """
+    Find all CSV+JSON pairs in results_dir (flat layout, one pair per conversation).
+    For each conversation_group_id, keep only the LATEST run.
+    """
+    csvs = sorted(results_dir.rglob("evaluation_*_detailed.csv"), reverse=True)
+    jsons_by_prefix = {}
+    for j in results_dir.rglob("evaluation_*_summary.json"):
+        jsons_by_prefix[extract_prefix(j)] = j
+
+    seen_gids: set[str] = set()
+    runs: list[ConvRun] = []
+
+    for csv_path in csvs:
+        prefix = extract_prefix(csv_path)
+        json_path = jsons_by_prefix.get(prefix)
+        if not json_path:
+            continue
+        run = ConvRun(csv_path, json_path)
+        if run.gid not in seen_gids:
+            seen_gids.add(run.gid)
+            runs.append(run)
+
+    return sorted(runs, key=lambda r: r.gid)
+
+
+# ── Formatting helpers ────────────────────────────────────────────────────────
+
 def result_emoji(result: str) -> str:
     return {"PASS": "✅", "FAIL": "❌", "ERROR": "⚠️", "SKIPPED": "⏭️"}.get(result, result)
 
 
-def score_bar(score: str, width: int = 20) -> str:
+def score_bar(score: str, width: int = 16) -> str:
     try:
         v = float(score)
     except (ValueError, TypeError):
@@ -148,234 +141,223 @@ def score_bar(score: str, width: int = 20) -> str:
 
 
 def fmt_keywords(keywords: list) -> str:
-    """Format expected_keywords as 'ALL(a, b) OR ALL(c, d)' alternatives."""
     if not keywords:
         return ""
-    parts = [" + ".join(f"`{k}`" for k in group) for group in keywords]
+    parts = [" + ".join(f"`{k}`" for k in g) for g in keywords]
     return "  \n".join(f"Option {i+1}: {p}" for i, p in enumerate(parts))
 
 
-def _is_expected_format(tool_calls: list) -> bool:
-    """
-    Detect expected_tool_calls (3-level) vs actual tool_calls (2-level).
-    expected: [alternatives → [sequences → [tools]]]  → tc[0][0] is a list
-    actual:   [sequences → [tools]]                   → tc[0][0] is a dict
-    """
+def _is_expected_format(tc: list) -> bool:
     try:
-        return isinstance(tool_calls[0][0], list)
+        return isinstance(tc[0][0], list)
     except (IndexError, TypeError):
         return False
 
 
-def fmt_tool_calls(tool_calls: list, label: str = "") -> list[str]:
-    """Format expected_tool_calls or actual tool_calls as markdown."""
+def fmt_tool_calls(tool_calls: list) -> list[str]:
     if not tool_calls:
         return []
-    lines = []
-    if label:
-        lines += [f"**{label}**", ""]
-
+    lines: list[str] = []
     if _is_expected_format(tool_calls):
-        # expected_tool_calls: [alternatives → [sequences → [tools]]]
-        for a_idx, alternative in enumerate(tool_calls):
-            if not alternative:
-                lines += [f"*Alternative {a_idx + 1}: no tools (skip scenario)*", ""]
+        for a_idx, alt in enumerate(tool_calls):
+            if not alt:
+                lines += [f"*Alt {a_idx+1}: no tools*", ""]
                 continue
-            lines.append(f"*Alternative {a_idx + 1}:*")
-            for sequence in alternative:
-                tools = sequence if isinstance(sequence, list) else [sequence]
-                for tool in tools:
-                    if isinstance(tool, dict):
-                        name = tool.get("tool_name", "?")
-                        args = tool.get("arguments", {})
+            lines.append(f"*Alt {a_idx+1}:*")
+            for seq in alt:
+                tools = seq if isinstance(seq, list) else [seq]
+                for t in tools:
+                    if isinstance(t, dict):
+                        args = t.get("arguments", {})
                         arg_str = ", ".join(f"{k}={v}" for k, v in args.items()) if args else ""
-                        lines.append(f"  - `{name}`({arg_str})")
+                        lines.append(f"  - `{t.get('tool_name','?')}`({arg_str})")
             lines.append("")
     else:
-        # actual tool_calls: [sequences → [tools]]
-        for sequence in tool_calls:
-            tools = sequence if isinstance(sequence, list) else [sequence]
-            for tool in tools:
-                if isinstance(tool, dict):
-                    name = tool.get("tool_name", "?")
-                    args = tool.get("arguments", {})
+        for seq in tool_calls:
+            tools = seq if isinstance(seq, list) else [seq]
+            for t in tools:
+                if isinstance(t, dict):
+                    args = t.get("arguments", {})
                     arg_str = ", ".join(f"{k}={v}" for k, v in list(args.items())[:4])
                     if len(args) > 4:
                         arg_str += ", …"
-                    lines.append(f"- `{name}`({arg_str})")
+                    lines.append(f"- `{t.get('tool_name','?')}`({arg_str})")
         lines.append("")
     return lines
 
 
 # ── Markdown generation ───────────────────────────────────────────────────────
 
-def generate_md(
-    csv_path: Path,
-    json_path: Path,
-    graphs: list[Path],
-    scenarios: dict,
-    output: Path,
-    _scenario_name: str = "",
-) -> None:
-    summary = load_json(json_path)
-    rows = load_csv(csv_path)
-    timestamp = extract_timestamp(csv_path)
+def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
+    if not runs:
+        print("ERROR: No runs found", file=sys.stderr)
+        sys.exit(1)
 
-    overall = summary.get("summary_stats", {}).get("overall", {})
-    by_metric = summary.get("summary_stats", {}).get("by_metric", {})
-    by_conv = summary.get("summary_stats", {}).get("by_conversation", {})
-    latency = summary.get("summary_stats", {}).get("agent_latency_stats", {})
+    # ── Aggregate stats across all runs ──────────────────────────────────────
+    total_pass = total_fail = total_error = total_evals = 0
+    metric_agg: dict[str, dict] = defaultdict(lambda: {"pass": 0, "fail": 0, "error": 0, "scores": []})
+    conv_stats: dict[str, dict] = {}
 
+    for run in runs:
+        o = run.summary.get("summary_stats", {}).get("overall", {})
+        total_pass += o.get("PASS", 0)
+        total_fail += o.get("FAIL", 0)
+        total_error += o.get("ERROR", 0)
+        total_evals += o.get("TOTAL", 0)
+        conv_stats[run.gid] = {
+            "pass": o.get("PASS", 0), "fail": o.get("FAIL", 0),
+            "error": o.get("ERROR", 0), "total": o.get("TOTAL", 0),
+            "timestamp": run.timestamp,
+        }
+        for m, s in run.summary.get("summary_stats", {}).get("by_metric", {}).items():
+            metric_agg[m]["pass"] += s.get("pass", 0)
+            metric_agg[m]["fail"] += s.get("fail", 0)
+            metric_agg[m]["error"] += s.get("error", 0)
+            mean = s.get("score_statistics", {}).get("mean")
+            if mean is not None:
+                metric_agg[m]["scores"].append(float(mean))
+
+    latest_ts = runs[-1].timestamp if runs else "—"
     lines: list[str] = []
 
     # ── Header ────────────────────────────────────────────────────────────────
     lines += [
         "# Evaluation Results",
         "",
-        f"**Run:** {timestamp}  ",
-        f"**Conversations:** {len(by_conv)}  ",
-        f"**Total evaluations:** {overall.get('TOTAL', 0)}  ",
+        f"**Latest run:** {latest_ts} &nbsp;|&nbsp; "
+        f"**Conversations:** {len(runs)} &nbsp;|&nbsp; "
+        f"**Evaluations:** {total_evals} &nbsp;|&nbsp; "
+        f"✅ {total_pass} &nbsp; ❌ {total_fail} &nbsp; ⚠️ {total_error}",
         "",
         "---",
         "",
     ]
 
-    # ── Overall summary ───────────────────────────────────────────────────────
-    lines += [
-        "## Overall Summary",
-        "",
-        "| | Count | Rate |",
-        "|---|---|---|",
-        f"| {result_emoji('PASS')} Pass    | {overall.get('PASS', 0)} | {overall.get('pass_rate', 0):.1f}% |",
-        f"| {result_emoji('FAIL')} Fail    | {overall.get('FAIL', 0)} | {overall.get('fail_rate', 0):.1f}% |",
-        f"| {result_emoji('ERROR')} Error   | {overall.get('ERROR', 0)} | {overall.get('error_rate', 0):.1f}% |",
-        f"| {result_emoji('SKIPPED')} Skipped | {overall.get('SKIPPED', 0)} | {overall.get('skipped_rate', 0):.1f}% |",
-        "",
-        "### Token Usage",
-        "",
-        "| | Tokens |",
-        "|---|---|",
-        f"| Judge LLM input  | {overall.get('total_judge_llm_input_tokens', 0):,} |",
-        f"| Judge LLM output | {overall.get('total_judge_llm_output_tokens', 0):,} |",
-        f"| API input  | {overall.get('total_api_input_tokens', 0):,} |",
-        f"| API output | {overall.get('total_api_output_tokens', 0):,} |",
-        f"| **Total** | **{overall.get('total_tokens', 0):,}** |",
-        "",
-    ]
-
-    if latency:
-        lines += [
-            "### Agent Latency",
-            "",
-            "| | Seconds |",
-            "|---|---|",
-            f"| Mean   | {latency.get('mean', 0):.2f}s |",
-            f"| Median | {latency.get('median', 0):.2f}s |",
-            f"| Min    | {latency.get('min', 0):.2f}s |",
-            f"| Max    | {latency.get('max', 0):.2f}s |",
-            f"| p95    | {latency.get('p95', 0):.2f}s |",
-            "",
-        ]
-
-    # ── By metric ─────────────────────────────────────────────────────────────
-    lines += ["## Results by Metric", ""]
-    lines += ["| Metric | ✅ Pass | ❌ Fail | ⚠️ Error | Pass Rate | Mean Score |"]
-    lines += ["|--------|--------|--------|---------|-----------|------------|"]
-    for metric, stats in by_metric.items():
-        mean = stats.get("score_statistics", {}).get("mean", "")
-        mean_str = f"{float(mean):.2f}" if mean != "" else "—"
+    # ── Summary table ─────────────────────────────────────────────────────────
+    lines += ["## Summary", ""]
+    lines += ["| Conversation | Run | ✅ | ❌ | ⚠️ | Pass Rate |", "|---|---|---|---|---|---|"]
+    for run in runs:
+        s = conv_stats[run.gid]
+        tot = s["total"]
+        rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
+        icon = "✅" if s["fail"] + s["error"] == 0 else ("❌" if s["pass"] == 0 else "🟡")
         lines.append(
-            f"| `{metric}` | {stats.get('pass',0)} | {stats.get('fail',0)} | "
-            f"{stats.get('error',0)} | {stats.get('pass_rate',0):.1f}% | {mean_str} |"
+            f"| `{run.gid}` | {s['timestamp']} | {s['pass']} | {s['fail']} | {s['error']} | {icon} {rate} |"
         )
     lines.append("")
 
-    # ── Graphs ────────────────────────────────────────────────────────────────
-    if graphs:
-        lines += ["## Graphs", ""]
-        for g in graphs:
-            label = g.stem.replace(re.search(r"evaluation_\d+_\d+_?", g.stem).group(), "").replace("_", " ").strip().title()
-            rel = g.relative_to(output.parent)
-            lines += [f"### {label}", "", f"![{label}]({rel})", ""]
+    # ── Metrics breakdown (aggregated) ────────────────────────────────────────
+    lines += ["## Metrics Breakdown", ""]
+    lines += ["| Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |", "|---|---|---|---|---|---|"]
+    for metric, s in sorted(metric_agg.items()):
+        tot = s["pass"] + s["fail"] + s["error"]
+        rate = s["pass"] / tot * 100 if tot else 0
+        icon = "✅" if rate == 100 else ("❌" if rate == 0 else "🟡")
+        mean_str = f"{sum(s['scores'])/len(s['scores']):.2f}" if s["scores"] else "—"
+        lines.append(
+            f"| `{metric}` | {s['pass']} | {s['fail']} | {s['error']} | {icon} {rate:.0f}% | {mean_str} |"
+        )
+    lines.append("")
 
-    # ── Per-scenario details ───────────────────────────────────────────────────
-    lines += ["## Scenario Results", ""]
+    # ── Per-conversation sections ─────────────────────────────────────────────
+    lines += ["## Scenario Details", ""]
 
-    # Build a lookup from CSV: (turn_id, metric) → row
-    convs: dict = {}
-    for row in rows:
-        gid = row.get("conversation_group_id", "")
-        convs.setdefault(gid, []).append(row)
-
-    for gid, conv_rows in convs.items():
-        sc = scenarios.get(gid, {})
+    for run in runs:
+        sc = scenarios.get(run.gid, {})
         desc = sc.get("_description", "")
-        conv_stats = by_conv.get(gid, {})
-        total_c = conv_stats.get("pass", 0) + conv_stats.get("fail", 0) + conv_stats.get("error", 0)
+        s = conv_stats[run.gid]
+        tot = s["total"]
+        rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
+        icon = "✅" if s["fail"] + s["error"] == 0 else "❌"
 
-        lines += [f"### `{gid}`", ""]
-        if desc:
-            lines += [f"> {desc}", ""]
         lines += [
-            f"**Pass rate:** {conv_stats.get('pass_rate', 0):.1f}% ({conv_stats.get('pass',0)}/{total_c})",
+            "<details>",
+            f"<summary><b>{icon} {run.gid}</b> — {rate} ({s['pass']}/{tot}) — {run.timestamp}"
+            + (f"  \n{desc}" if desc else "") + "</summary>",
             "",
         ]
 
-        # Group rows by turn_id
-        turns: dict = {}
-        for row in conv_rows:
-            turns.setdefault(row.get("turn_id", ""), []).append(row)
+        # Graphs (collapsed inside each conversation)
+        graphs = run.graphs
+        primary_key = next((k for k in ["pass_rates", "status_breakdown"] if k in graphs), None)
+        if graphs:
+            lines += ["<details>", "<summary>📊 Graphs</summary>", ""]
+            for key, g in sorted(graphs.items()):
+                label = key.replace("_", " ").title()
+                rel = g.relative_to(output.parent)
+                lines += [f"**{label}**", "", f"![{label}]({rel})", ""]
+            lines += ["</details>", ""]
+
+        # Token usage (collapsed)
+        o = run.summary.get("summary_stats", {}).get("overall", {})
+        lat = run.summary.get("summary_stats", {}).get("agent_latency_stats", {})
+        lines += [
+            "<details>",
+            "<summary>⚙️ Tokens &amp; latency</summary>",
+            "",
+            f"Judge: {o.get('total_judge_llm_tokens',0):,} tokens &nbsp;|&nbsp; "
+            f"API: {o.get('total_api_tokens',0):,} tokens &nbsp;|&nbsp; "
+            f"Total: {o.get('total_tokens',0):,} tokens",
+        ]
+        if lat:
+            lines.append(
+                f"Latency — mean: {lat.get('mean',0):.1f}s &nbsp; "
+                f"median: {lat.get('median',0):.1f}s &nbsp; "
+                f"p95: {lat.get('p95',0):.1f}s"
+            )
+        lines += ["", "</details>", ""]
+
+        # Turns
+        turns: dict = defaultdict(list)
+        for row in run.rows:
+            turns[row.get("turn_id", "")].append(row)
 
         for tid, turn_rows in turns.items():
             turn_sc = sc.get(tid, {})
             query = turn_sc.get("query", "")
-            expected_resp = turn_sc.get("expected_response", "")
+            expected = turn_sc.get("expected_response", "")
             expected_kw = turn_sc.get("expected_keywords", [])
             expected_tc = turn_sc.get("expected_tool_calls", [])
-
-            # Actual tool_calls from CSV (from any row of this turn)
-            actual_tc_raw = ""
-            for r in turn_rows:
-                if r.get("tool_calls"):
-                    actual_tc_raw = r["tool_calls"]
-                    break
-            actual_tc = json.loads(actual_tc_raw) if actual_tc_raw else []
-
-            first = turn_rows[0]
-            response = first.get("response", "").strip()
-
             turn_metrics = turn_sc.get("turn_metrics", [])
+
+            actual_tc_raw = next((r.get("tool_calls", "") for r in turn_rows if r.get("tool_calls")), "")
+            actual_tc = json.loads(actual_tc_raw) if actual_tc_raw else []
+            response = turn_rows[0].get("response", "").strip()
             metrics_str = " · ".join(f"`{m}`" for m in turn_metrics) if turn_metrics else ""
 
-            lines += [f"#### Turn: `{tid}`", ""]
-
+            lines += [f"### Turn: `{tid}`", ""]
             if metrics_str:
-                lines += [f"**Metrics evaluated:** {metrics_str}", ""]
-
+                lines += [f"**Metrics:** {metrics_str}", ""]
             if query:
                 lines += [f"**Query:** {query}", ""]
 
-            # Metrics table
-            lines += ["| Metric | Result | Score |", "|--------|--------|-------|"]
+            lines += ["| Metric | Result | Score |", "|---|---|---|"]
             for row in turn_rows:
-                metric = row.get("metric_identifier", "")
-                result = row.get("result", "")
-                score = row.get("score", "")
                 lines.append(
-                    f"| `{metric}` | {result_emoji(result)} {result} | {score_bar(score)} |"
+                    f"| `{row.get('metric_identifier','')}` | "
+                    f"{result_emoji(row.get('result',''))} {row.get('result','')} | "
+                    f"{score_bar(row.get('score',''))} |"
                 )
             lines.append("")
 
-            # Expected keywords
-            if expected_kw:
-                lines += ["<details>", "<summary>Expected keywords</summary>", ""]
-                lines.append(fmt_keywords(expected_kw))
-                lines += ["", "</details>", ""]
+            # Judge reasons (failures only)
+            failures = [r for r in turn_rows if r.get("result") != "PASS"]
+            if failures:
+                lines += ["<details>", "<summary>Judge reasons (failures)</summary>", ""]
+                for row in failures:
+                    js = row.get("judge_scores") or []
+                    reason = (js[0].get("reason", "") if js else row.get("reason", ""))[:300]
+                    if reason:
+                        lines += [f"**`{row.get('metric_identifier','')}`:** {reason}", ""]
+                lines += ["</details>", ""]
 
-            # Expected tool calls
-            if expected_tc:
-                lines += ["<details>", "<summary>Expected tool calls</summary>", ""]
-                lines += fmt_tool_calls(expected_tc)
+            # Expected signals
+            if expected_kw or expected_tc:
+                lines += ["<details>", "<summary>Expected signals</summary>", ""]
+                if expected_kw:
+                    lines += ["**Keywords:**  ", fmt_keywords(expected_kw), ""]
+                if expected_tc:
+                    lines += ["**Tool calls:**", ""] + fmt_tool_calls(expected_tc)
                 lines += ["</details>", ""]
 
             # Actual tool calls
@@ -384,43 +366,24 @@ def generate_md(
                 lines += fmt_tool_calls(actual_tc)
                 lines += ["</details>", ""]
 
-            # Expected response
-            if expected_resp:
-                lines += ["<details>", "<summary>Expected response</summary>", "", expected_resp, "", "</details>", ""]
-
-            # Judge reasons
-            for row in turn_rows:
-                reason = row.get("reason", "").strip()
-                if reason:
-                    lines += [
-                        "<details>",
-                        f"<summary>Judge reason — {row.get('metric_identifier','')}</summary>",
-                        "",
-                        reason,
-                        "",
-                        "</details>",
-                        "",
-                    ]
-
             # Agent response
             if response:
-                truncated = response[:800] + ("…" if len(response) > 800 else "")
+                truncated = response[:1000] + ("…" if len(response) > 1000 else "")
                 lines += [
-                    "<details>",
-                    "<summary>Agent response</summary>",
-                    "",
-                    "```",
-                    truncated,
-                    "```",
-                    "",
-                    "</details>",
-                    "",
+                    "<details>", "<summary>Agent response</summary>", "",
+                    "```", truncated, "```", "", "</details>", "",
                 ]
 
-        lines += ["---", ""]
+            # Expected response
+            if expected:
+                lines += [
+                    "<details>", "<summary>Expected response</summary>", "",
+                    expected, "", "</details>", "",
+                ]
 
-    lines += [f"*Generated from `{csv_path.name}` and `{json_path.name}`.*"]
+        lines += ["</details>", ""]
 
+    lines += ["*Generated by `scripts/generate_results.py`*"]
     output.write_text("\n".join(lines), encoding="utf-8")
     print(f"✓ RESULTS.md written to {output}")
 
@@ -429,11 +392,9 @@ def generate_md(
 
 def main() -> None:
     root = Path(__file__).parent.parent
-
-    parser = argparse.ArgumentParser(description="Generate RESULTS.md from evaluation output")
+    parser = argparse.ArgumentParser(description="Generate RESULTS.md")
     parser.add_argument("--results-dir", default=str(root / "results"))
-    parser.add_argument("--scenarios-dir", default=str(root / "scenarios"),
-                        help="Directory containing conversations.yaml or scenario eval_data.yaml files")
+    parser.add_argument("--scenarios-dir", default=str(root / "scenarios"))
     parser.add_argument("--output", default=str(root / "RESULTS.md"))
     args = parser.parse_args()
 
@@ -443,49 +404,23 @@ def main() -> None:
 
     runs = find_all_runs(results_dir)
     if not runs:
-        print(f"ERROR: No evaluation results found under {results_dir}", file=sys.stderr)
+        print(f"ERROR: No CSV/JSON pairs found in {results_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Load conversations: prefer scenarios/conversations.yaml, fall back to scenarios/*/eval_data.yaml
+    print(f"Found {len(runs)} conversation run(s): {', '.join(r.gid for r in runs)}")
+
     all_scenarios: dict = {}
     if scenarios_dir.exists():
-        conversations_file = scenarios_dir / "conversations.yaml"
-        if conversations_file.exists():
-            all_scenarios.update(load_scenarios(conversations_file))
+        conv_file = scenarios_dir / "conversations.yaml"
+        if conv_file.exists():
+            all_scenarios.update(load_scenarios(conv_file))
         else:
-            for scenario_dir in sorted(scenarios_dir.iterdir()):
-                eval_file = scenario_dir / "eval_data.yaml"
-                if eval_file.exists():
-                    all_scenarios.update(load_scenarios(eval_file))
+            for sd in sorted(scenarios_dir.iterdir()):
+                ef = sd / "eval_data.yaml"
+                if ef.exists():
+                    all_scenarios.update(load_scenarios(ef))
 
-    if len(runs) == 1:
-        # Single run (flat layout or single scenario) → full report at root
-        _, csv_path, json_path = runs[0]
-        print(f"Using: {csv_path.name}")
-        graphs = find_graphs(csv_path)
-        generate_md(csv_path, json_path, graphs, all_scenarios, output)
-    else:
-        # Multiple runs (per-subdir) → combined full report at root
-        lines_all: list[str] = [
-            "# Evaluation Results — All Scenarios",
-            "",
-            f"**Scenarios:** {len(runs)}  ",
-            "",
-            "---",
-            "",
-        ]
-        for name, csv_path, json_path in runs:
-            print(f"Including: {name} / {csv_path.name}")
-            graphs = find_graphs(csv_path)
-            tmp = output.parent / f".tmp_results_{name}.md"
-            generate_md(csv_path, json_path, graphs, all_scenarios, tmp)
-            lines_all += [f"## Scenario: `{name}`", ""]
-            lines_all += tmp.read_text().splitlines()
-            tmp.unlink()
-            lines_all += ["", "---", ""]
-
-        output.write_text("\n".join(lines_all), encoding="utf-8")
-        print(f"✓ Combined RESULTS.md written to {output}")
+    generate_md(runs, all_scenarios, output)
 
 
 if __name__ == "__main__":

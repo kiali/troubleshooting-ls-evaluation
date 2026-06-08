@@ -10,13 +10,15 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 .PHONY: all clean-results generate-results \
-        fix_bookinfo_fault_injection check_mesh_status
+        fix_bookinfo_fault_injection fix_bookinfo_routing check_mesh_status
 
 CONVERSATIONS = scenarios/conversations.yaml
+WAIT_SECONDS ?= 200   # seconds to wait after setup/cleanup for metrics to propagate
 
 # Base eval command — shared by all targets
 EVAL_BASE = OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
             GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \
+            WAIT_SECONDS=$(WAIT_SECONDS) \
             API_KEY=$$(oc whoami -t) \
             venv/bin/lightspeed-eval \
             --system-config system.yaml \
@@ -32,15 +34,19 @@ generate-results: check-venv
 	venv/bin/python scripts/generate_results.py
 
 # ── all: run every conversation in conversations.yaml ─────────────────────────
-all: clean-results check-venv check-openai-key check-services check-bookinfo
-	$(EVAL_BASE) --output-dir results
+all: clean-results check-venv check-openai-key check-services check-bookinfo \
+	fix_bookinfo_routing check_mesh_status fix_bookinfo_fault_injection
 
 # ── Individual conversation targets ───────────────────────────────────────────
 
 fix_bookinfo_fault_injection: check-venv check-openai-key check-services check-bookinfo
 	$(EVAL_BASE) \
-	  --conv-ids fix_bookinfo_fault_injection
+	  --tag fault_injection_bookinfo
+
+fix_bookinfo_routing: check-venv check-openai-key check-services check-bookinfo
+	$(EVAL_BASE) \
+	  --tag fix_bookinfo_routing
 
 check_mesh_status: check-venv check-openai-key check-services check-bookinfo
 	$(EVAL_BASE) \
-	  --conv-ids check_mesh_status
+	  --tag healthy_env

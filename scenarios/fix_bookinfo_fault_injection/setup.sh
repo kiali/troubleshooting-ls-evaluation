@@ -3,12 +3,28 @@ set -euo pipefail
 
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
 NAMESPACE="bookinfo"
-WAIT_SECONDS=60   # time for Istio/Kiali to collect traffic stats after fault injection
+WAIT_SECONDS=${WAIT_SECONDS:-180}  # override with: make all WAIT_SECONDS=60
 
-# Apply the fault injection — DestinationRule + VirtualService with 100% 503 abort
+# ── Clean pre-existing ratings Istio resources ────────────────────────────────
+# Removes leftover resources — including any AuthorizationPolicies created by a
+# previous agent run — so the agent starts with a clean slate each time.
+echo "Removing existing ratings Istio resources…"
+oc delete virtualservice     ratings                  -n "$NAMESPACE" --ignore-not-found
+oc delete destinationrule    ratings                  -n "$NAMESPACE" --ignore-not-found
+oc delete peerauthentication ratings-permissive-mtls  -n "$NAMESPACE" --ignore-not-found
+# Remove AuthorizationPolicies targeting ratings that a previous agent may have created
+oc delete authorizationpolicy allow-reviews-to-ratings  -n "$NAMESPACE" --ignore-not-found || true
+oc delete authorizationpolicy ratings-viewer             -n "$NAMESPACE" --ignore-not-found || true
+oc get authorizationpolicy -n "$NAMESPACE" --no-headers 2>/dev/null \
+  | grep -i ratings | awk '{print $1}' \
+  | xargs -r oc delete authorizationpolicy -n "$NAMESPACE" --ignore-not-found || true
+sleep 5   # allow Istio to propagate the deletions
+
+# ── Apply the fault injection manifests ───────────────────────────────────────
+echo "Applying fault injection manifests…"
 oc apply -f "$FIXTURE_DIR/manifests.yaml"
 
-# Verify the VirtualService was accepted by Istio
+# Verify the VirtualService was accepted
 ATTEMPT=0
 until [ "$ATTEMPT" -ge 10 ]; do
   ATTEMPT=$((ATTEMPT + 1))
@@ -26,7 +42,6 @@ if [ "$VS" -lt 1 ]; then
   exit 1
 fi
 
-# Wait for traffic stats to accumulate so Kiali reflects the fault injection
 echo "Waiting ${WAIT_SECONDS}s for Istio metrics to propagate to Kiali…"
 sleep "$WAIT_SECONDS"
-echo "Setup complete — fault injection is active and traffic stats are ready."
+echo "Setup complete — fault injection is active."

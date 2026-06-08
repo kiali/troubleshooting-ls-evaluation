@@ -1,3 +1,4 @@
+# The real issue is the fault.abort in the VirtualService below.
 apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:

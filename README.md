@@ -1,227 +1,53 @@
 # Kiali — LightSpeed Troubleshooting Evaluation
 
-> Latest evaluation results: **[RESULTS.md](RESULTS.md)**
+> Latest evaluation results: **[RESULTS.md](RESULTS.md)**  
+> Full setup & run guide: **[DEVELOPMENT.md](DEVELOPMENT.md)**
 
 End-to-end evaluation of the [OpenShift LightSpeed](https://github.com/openshift/lightspeed-service)
 troubleshooting agent against a live Kiali / Istio cluster.
 
-Conversations are defined in `scenarios/conversations.yaml`. Each one may deploy a broken
-workload via a setup script, ask the agent to diagnose and fix it, then clean up.
+Conversations are defined in `scenarios/conversations.yaml`. Each one deploys a broken
+workload via a setup script, asks the agent to diagnose and fix it, then cleans up.
 Responses are scored with LLM-based metrics (`custom:answer_correctness`,
 `custom:keywords_eval`, `custom:tool_eval`).
 
 ---
 
-## Prerequisites
+## LLM Configuration
 
-### 1. CRC cluster with Istio and Kiali
+Two LLM providers are supported. Switch with `PROVIDER=openai` (default) or `PROVIDER=google`.
 
-A running [CRC (OpenShift Local)](https://developers.redhat.com/products/openshift-local)
-cluster with Istio and Kiali installed, **or** a [kind](https://kind.sigs.k8s.io/) cluster
-(pass `CLUSTER=kind` to all `make` targets).
+| Provider | OLS backend | Judge LLM | Credentials |
+|---|---|---|---|
+| `openai` (default) | Gemini via OpenAI-compat endpoint | Claude Opus via Vertex AI | `~/.openai/openai_api_key.txt` + `~/.gcp/gcp_credentials.txt` |
+| `google` | Gemini via Google Vertex AI | Gemini via Vertex AI | `~/.gcp/gcp_credentials.txt` |
 
-```bash
-crc start
-eval $(crc oc-env)
-oc login -u developer -p developer https://api.crc.testing:6443
-oc get pods -n istio-system | grep kiali   # verify Kiali is up
-```
-
-The default `KIALI_ENDPOINT` is already set to `https://kiali-istio-system.apps-crc.testing/`.
-When using `CLUSTER=kind` the default becomes `http://localhost:20001/` (Kiali port-forward).
-
-### 2. Bookinfo application with traffic generation
-
-```bash
-curl -L https://raw.githubusercontent.com/kiali/kiali/master/hack/istio/install-bookinfo-demo.sh \
-  -o install-bookinfo-demo.sh
-chmod +x install-bookinfo-demo.sh
-./install-bookinfo-demo.sh -tg true   # -tg starts the Kiali traffic generator
-oc get pods -n bookinfo               # all pods should be Running
-```
-
-### 3. API keys
-
-```bash
-# LLM provider (judge + OLS backend)
-mkdir -p ~/.openai ~/.gemini
-echo "sk-..."    > ~/.openai/openai_api_key.txt
-echo "AIza..."   > ~/.gemini/google_api_key.txt
-```
-
-Or export directly — the Makefile reads the file only when the variable is unset:
-
-```bash
-export OPENAI_API_KEY="sk-..."
-```
-
-### 4. Node.js ≥ 18 (MCP server)
-
-```bash
-node --version   # v18 or higher
-```
-
-### 5. Podman (OLS container)
-
-```bash
-podman --version
-```
-
-### 6. Python 3.11+
-
-```bash
-python3 --version   # 3.11 or higher
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the full credential setup guide.
 
 ---
 
-## Setup
-
-### Install the evaluation framework
+## Quick start
 
 ```bash
-make setup
-```
+# 1. Set up credentials (see DEVELOPMENT.md §2)
 
-Creates `venv/` and installs `lightspeed-evaluation`. Fails early if Python < 3.11.
+# 2. Install the evaluation framework
+make setup && make setup-vector-db
 
-### Extract the Kiali RAG vector database
-
-OLS uses a Kiali knowledge base built from [kiali.io](https://kiali.io) docs via
-[kiali-byok](https://github.com/kiali/kiali-byok). Extract it once:
-
-```bash
-make setup-vector-db
-```
-
-Re-extract after a new release:
-
-```bash
-rm -rf vector_db/kiali && make setup-vector-db
-```
-
-### Install the web dashboard (optional)
-
-```bash
-make setup-dashboard
-```
-
-Downloads and installs the [lightspeed-evaluation dashboard](https://github.com/lightspeed-core/lightspeed-evaluation/tree/main/dashboard)
-into `dashboard/`. Pin to a specific version with `LSE_TAG=v0.6.0`.
-
----
-
-## Running the evaluations
-
-Three terminals are needed: MCP server, OLS service, and the eval runner.
-
-### Running with kind
-
-Before starting, expose Kiali via port-forward in a background terminal:
-
-```bash
-kubectl port-forward -n istio-system svc/kiali 20001:20001 &
-```
-
-Then pass `CLUSTER=kind` to every `make` target:
-
-```bash
-make run-mcp CLUSTER=kind
-make run-ols                            # unchanged — local Podman container
-make all CLUSTER=kind
-make fix_bookinfo_fault_injection CLUSTER=kind
-```
-
-`CLUSTER=kind` automatically sets `KUBECTL=kubectl` and `KIALI_ENDPOINT=http://localhost:20001/`.
-You can still override individually: `make run-mcp CLUSTER=kind KIALI_ENDPOINT=http://my-kiali/`.
-
----
-
-### Terminal 1 — Kubernetes MCP server
-
-```bash
+# 3. Terminal 1 — MCP server
 make run-mcp
-# or with a custom Kiali URL:
-make run-mcp KIALI_ENDPOINT=https://kiali-istio-system.apps-crc.testing/
-```
 
-Starts the MCP server on port **8089** with the `kiali` toolset.
+# 4. Terminal 2 — OLS service
+make run-ols               # openai (default)
+make run-ols PROVIDER=google
 
-### Terminal 2 — OLS LightSpeed service
+# 5. Terminal 3 — Run evaluations
+make all
+make all PROVIDER=google
 
-```bash
-make run-ols
-```
-
-Starts the LightSpeed API container on port **8080** and automatically extracts
-the vector DB if needed. Mounts:
-
-| Host path | Container path | Purpose |
-|-----------|---------------|---------|
-| `./olsconfig/` | `/app-root/config/` | OLS configuration |
-| `./vector_db/` | `/app-root/vector_db/` | Kiali RAG index |
-| `~/.openai/openai_api_key.txt` | `/app-root/openai_api_key.txt` | OpenAI key |
-| `~/.gemini/google_api_key.txt` | `/app-root/google_api_key.txt` | Gemini key |
-
-### Terminal 3 — Run evaluations
-
-```bash
-make all                          # run all conversations in conversations.yaml
-make fix_bookinfo_fault_injection # run one specific conversation
-make check_mesh_status            # run one specific conversation
-```
-
-Pre-flight checks before every run:
-- `venv/` exists → `make setup`
-- `OPENAI_API_KEY` set or readable from key file
-- Port **8080** open (OLS)
-- Port **8089** open (MCP)
-- Bookinfo pods running in `bookinfo` namespace
-
-Results land in `results/`.
-
-### Generate the Markdown report
-
-```bash
+# 6. Generate report
 make generate-results
 ```
-
-Writes `RESULTS.md` with overall summary, per-metric breakdown, graphs, and
-per-turn judge reasons.
-
----
-
-## Viewing results in the dashboard
-
-The [lightspeed-evaluation dashboard](https://github.com/lightspeed-core/lightspeed-evaluation/tree/main/dashboard)
-provides an interactive web UI for exploring evaluation results, comparing runs,
-and re-running evaluations from the browser.
-
-### 1. Install (once)
-
-```bash
-make setup-dashboard
-```
-
-Sparse-clones just the `dashboard/` folder from `lightspeed-evaluation` and runs
-`npm install`. Re-run after removing `dashboard/` to upgrade.
-
-### 2. Start the dashboard
-
-```bash
-make run-dashboard
-```
-
-Opens the dev server at **<http://localhost:5173>** with the project paths pre-configured:
-
-| Variable | Value | Description |
-|---|---|---|
-| `LS_EVAL_SYSTEM_CFG_PATH` | `../system.yaml` | Evaluation system configuration |
-| `LS_EVAL_DATA_PATH` | `../scenarios` | Conversations directory |
-| `LS_EVAL_REPORTS_PATH` | `../results` | Results directory |
-| `LS_EVAL_DASHBOARD_RUN_ENABLED` | `true` | Allow triggering runs from the browser |
-
-`API_KEY` and `OPENAI_API_KEY` are injected automatically (same as the eval commands).
 
 ---
 
@@ -234,12 +60,13 @@ Opens the dev server at **<http://localhost:5173>** with the project paths pre-c
 | `make setup` | Create `venv/` and install the evaluation framework |
 | `make setup-vector-db` | Extract the Kiali RAG index from the BYOK image |
 | `make setup-dashboard` | Clone and install the web dashboard |
+| `make check-provider` | Show active provider, OLS config, and system config |
 
 ### Services
 
 | Target | Description |
 |--------|-------------|
-| `make run-ols` | Run the LightSpeed service container (port 8080) |
+| `make run-ols [PROVIDER=…]` | Run the LightSpeed service container (port 8080) |
 | `make run-mcp` | Start the Kubernetes MCP server with Kiali toolset (port 8089) |
 | `make run-dashboard` | Start the evaluation dashboard (port 5173) |
 
@@ -247,25 +74,23 @@ Opens the dev server at **<http://localhost:5173>** with the project paths pre-c
 
 | Target | Description |
 |--------|-------------|
-| `make all` | Run all conversations in `scenarios/conversations.yaml` |
-| `make fix_bookinfo_fault_injection` | Run one conversation by ID |
-| `make check_mesh_status` | Run one conversation by ID |
-| `make generate-results` | Generate `RESULTS.md` from the latest run |
-| `make clean-results` | Wipe the `results/` directory |
+| `make all [PROVIDER=…]` | Run all conversations |
+| `make fix_bookinfo_fault_injection` | Run one conversation |
+| `make fix_bookinfo_routing` | Run one conversation |
+| `make check_mesh_status` | Run one conversation |
+| `make troubleshoot_latency_trace` | Run one conversation |
+| `make generate-results [PROVIDER=…]` | Generate `RESULTS.md` |
+| `make clean-results [PROVIDER=…]` | Wipe `results/<provider>/` |
 
 ### Overridable variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `CLUSTER` | `openshift` | Cluster type: `openshift` (uses `oc`) or `kind` (uses `kubectl`) |
-| `KUBECTL` | `oc` / `kubectl` | CLI binary; set automatically from `CLUSTER`, override if needed |
-| `KIALI_ENDPOINT` | varies by `CLUSTER` | Kiali UI/API URL |
+| `PROVIDER` | `openai` | LLM provider (`openai` or `google`) |
+| `KIALI_ENDPOINT` | `https://kiali-istio-system.apps-crc.testing/` | Kiali UI/API URL |
 | `OLS_IMAGE` | `quay.io/openshift-lightspeed/lightspeed-service-api:latest` | OLS image |
+| `WAIT_SECONDS` | `200` | Seconds to wait after setup/cleanup for metrics |
 | `KIALI_RAG_DB` | `quay.io/kiali/kiali-byok:latest` | BYOK image for vector DB |
-| `LSE_TAG` | `main` | Branch/tag for `make setup-dashboard` |
-| `MCP_CONFIG` | `mcp_config.toml` | MCP server config file |
-| `OPENAI_KEY_FILE` | `~/.openai/openai_api_key.txt` | OpenAI key file path |
-| `GEMINI_KEY_FILE` | `~/.gemini/google_api_key.txt` | Gemini key file path |
 
 ---
 
@@ -274,59 +99,40 @@ Opens the dev server at **<http://localhost:5173>** with the project paths pre-c
 ```
 .
 ├── Makefile                          # Setup and service targets
+├── DEVELOPMENT.md                    # Step-by-step setup and run guide
 ├── scenarios/
 │   ├── scenarios.mk                  # Evaluation targets (included by Makefile)
 │   ├── conversations.yaml            # All evaluation conversations
-│   └── fix_bookinfo_fault_injection/ # Scenario scripts and fixtures
-│       ├── setup.sh
-│       ├── cleanup.sh
-│       └── fixtures/manifests.yaml
-├── system.yaml                       # Evaluation system config (judge LLM + metrics)
-├── mcp_config.toml                   # Kubernetes MCP server config
+│   ├── fix_bookinfo_fault_injection/ # Fault injection scenario
+│   ├── fix_bookinfo_routing/         # Traffic routing scenario
+│   ├── troubleshoot_latency_trace/   # Latency / trace scenario
+│   └── check_mesh_status/            # (no setup/cleanup needed)
+├── system/
+│   ├── system_openai.yaml            # Judge + API config for openai provider
+│   └── system_google.yaml            # Judge + API config for google provider
 ├── olsconfig/
-│   └── olsconfig-openai.yaml         # OLS service config (LLM provider + RAG index)
+│   ├── olsconfig-openai.yaml         # OLS config for openai provider
+│   └── olsconfig-google.yaml         # OLS config for google provider
+├── mcp_config.toml                   # Kubernetes MCP server config
 ├── scripts/
 │   └── generate_results.py           # RESULTS.md generator
 ├── vector_db/                        # git-ignored — from make setup-vector-db
 ├── dashboard/                        # git-ignored — from make setup-dashboard
-└── results/                          # git-ignored — evaluation output
+└── results/                          # evaluation output
+    ├── <conv>_<model>.md             # committed per-run detail pages
+    └── evaluation_*.csv / *.json     # git-ignored raw data
 ```
 
 ---
 
-## Conversations (`scenarios/conversations.yaml`)
+## Conversations
 
-All conversations are defined in a single YAML file. Each can optionally include
-`setup_script` and `cleanup_script` paths (resolved relative to the YAML file).
+All conversations are defined in `scenarios/conversations.yaml` with optional
+`setup_script` / `cleanup_script` (resolved relative to the YAML file).
 
-### `check_mesh_status`
-
-Asks the agent to report the current health of the Istio service mesh using Kiali.
-No cluster state is modified. Validates that the agent calls `kiali_get_mesh_status`.
-
-**Metrics:** `custom:answer_correctness` · `custom:keywords_eval` · `custom:tool_eval`
-
-### `fix_bookinfo_fault_injection`
-
-Injects a `fault.abort` rule into the `ratings` VirtualService (100% HTTP 503),
-waits 60 s for Kiali metrics to reflect the fault, then asks the agent to diagnose
-and fix the issue. Cleanup removes the fault rule and waits 60 s for metrics to
-stabilise.
-
-**Metrics:** `custom:answer_correctness` · `custom:keywords_eval` · `custom:tool_eval`
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| `ERROR: venv not found` | `make setup` |
-| `ERROR: python3 >= 3.11 is required` | Install Python 3.11+ |
-| `ERROR: Port 8080 not open` | `make run-ols` in a separate terminal |
-| `ERROR: Port 8089 not open` | `make run-mcp` in a separate terminal |
-| `ERROR: Key file not found` | `echo "sk-..." > ~/.openai/openai_api_key.txt` |
-| `ERROR: Bookinfo is not running` | `./install-bookinfo-demo.sh -tg true` |
-| `SKIP vector_db/kiali already exists` | `rm -rf vector_db/kiali && make setup-vector-db` |
-| `SKIP dashboard/ already exists` | `rm -rf dashboard && make setup-dashboard` |
-| All evaluations ERROR, 0 tokens | `OPENAI_API_KEY` expired — re-export it |
+| Conversation | Category | Description |
+|---|---|---|
+| `check_mesh_status` | Health | Agent reports mesh and service health |
+| `fix_bookinfo_fault_injection` | Fault injection | 100% HTTP 503 on ratings — diagnose and fix |
+| `fix_bookinfo_routing` | Traffic routing | reviews-v3 weight 0 — find and fix |
+| `troubleshoot_latency_trace` | Latency / tracing | 3-second delay on ratings — trace and fix |

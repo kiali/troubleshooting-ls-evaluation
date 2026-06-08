@@ -13,7 +13,7 @@ core:
 # Judge LLM — scores OLS responses against expected answers
 llm:
   provider: "openai"
-  model: "gemini-2.5-pro"
+  model: "gpt-5.4-mini"   # gpt-5-mini does not produce valid JSON for DeepEval metrics
   temperature: 0.0
   max_tokens: 5000
   timeout: 300
@@ -27,7 +27,7 @@ api:
   endpoint_type: query
   timeout: 300
   provider: "openai"
-  model: "gemini-2.5-pro"
+  model: "gpt-5.4-mini"   # must match olsconfig-openai.yaml default_model
   no_tools: null
   system_prompt: null
   cache_enabled: false

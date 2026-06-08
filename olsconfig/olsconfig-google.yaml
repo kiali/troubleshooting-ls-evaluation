@@ -11,11 +11,14 @@
 # Eval system config: eval/troubleshooting/system_openai.yaml
 
 llm_providers:
-  - name: openai
-    type: openai
-    credentials_path: openai_api_key.txt
+  - name: google_vertex
+    type: google_vertex
+    googleVertexConfig: 
+      projectID: "ossm-kiali-chatbot"
+      location: "us-central1"
+    credentials_path: gcp_credentials.txt   # GCP service account JSON (not the Gemini API key)
     models:
-      - name: gpt-5.4-mini
+      - name: gemini-2.5-pro
 
 mcp_servers:
   - name: kubernetes-mcp-server
@@ -31,8 +34,8 @@ ols_config:
     app_log_level: info
     lib_log_level: warning
     uvicorn_log_level: info
-  default_provider: openai
-  default_model: gpt-5.4-mini
+  default_provider: google_vertex
+  default_model: gemini-2.5-pro
   authentication_config:
     module: "noop-with-token"
   reference_content:

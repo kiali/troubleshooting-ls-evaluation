@@ -43,11 +43,31 @@ LSE_REPO          = https://github.com/lightspeed-core/lightspeed-evaluation.git
 OPENAI_KEY_FILE ?= $(HOME)/.openai/openai_api_key.txt
 GEMINI_KEY_FILE ?= $(HOME)/.gemini/google_api_key.txt
 
+# ── Provider selection ─────────────────────────────────────────────────────────
+# Usage: make run-ols PROVIDER=google   make all PROVIDER=openai
+PROVIDER ?= openai
+
+ifeq ($(PROVIDER),openai)
+  OLS_PROVIDER_CONFIG_FILE = olsconfig-openai.yaml
+  SYSTEM_CONFIG             = system/system_openai.yaml
+else ifeq ($(PROVIDER),google)
+  OLS_PROVIDER_CONFIG_FILE = olsconfig-google.yaml
+  SYSTEM_CONFIG             = system/system_google.yaml
+else
+  $(error Unknown PROVIDER "$(PROVIDER)". Supported values: openai, google)
+endif
+
 # ── Include evaluation targets ─────────────────────────────────────────────────
 include scenarios/scenarios.mk
 
 .PHONY: setup setup-vector-db setup-dashboard run-dashboard run-ols run-mcp \
-        check-venv check-openai-key check-services check-bookinfo
+        check-venv check-openai-key check-services check-bookinfo check-provider
+
+# ── Provider info ─────────────────────────────────────────────────────────────
+check-provider:
+	@printf 'Provider:     \033[1m%s\033[0m\n' "$(PROVIDER)"
+	@printf 'OLS config:   olsconfig/%s\n' "$(OLS_PROVIDER_CONFIG_FILE)"
+	@printf 'System cfg:   %s\n' "$(SYSTEM_CONFIG)"
 
 # ── Environment guards ─────────────────────────────────────────────────────────
 
@@ -141,13 +161,21 @@ setup-vector-db:
 
 # ── Services ───────────────────────────────────────────────────────────────────
 
-run-ols: setup-vector-db
+run-ols: check-provider setup-vector-db
+	@openai_mount=""; gemini_mount=""; gcp_mount=""; \
+	[ -f "$(HOME)/.openai/openai_api_key.txt" ] && \
+	  openai_mount="-v $(HOME)/.openai/openai_api_key.txt:/app-root/openai_api_key.txt:Z"; \
+	[ -f "$(HOME)/.gemini/google_api_key.txt" ] && \
+	  gemini_mount="-v $(HOME)/.gemini/google_api_key.txt:/app-root/google_api_key.txt:Z"; \
+	[ -f "$(HOME)/.gcp/gcp_credentials.txt" ] && \
+	  gcp_mount="-v $(HOME)/.gcp/gcp_credentials.txt:/app-root/gcp_credentials.txt:Z"; \
 	podman run -it --rm \
 	  -v ./olsconfig:/app-root/config:Z \
 	  -v ./vector_db:/app-root/vector_db:Z \
-	  -v ~/.openai/openai_api_key.txt:/app-root/openai_api_key.txt:Z \
-	  -v ~/.gemini/google_api_key.txt:/app-root/google_api_key.txt:Z \
-	  -e OLS_CONFIG_FILE=/app-root/config/olsconfig-openai.yaml \
+	  $$openai_mount \
+	  $$gemini_mount \
+	  $$gcp_mount \
+	  -e OLS_CONFIG_FILE=/app-root/config/$(OLS_PROVIDER_CONFIG_FILE) \
 	  -p 8080:8080 \
 	  $(OLS_IMAGE)
 

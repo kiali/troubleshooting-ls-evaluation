@@ -2,15 +2,12 @@
 """
 generate_results.py
 
-Each evaluation run produces one CSV + JSON pair (same timestamp).
-The conversation_group_id column in the CSV identifies the conversation.
-Multiple runs → multiple pairs → this script merges them all.
+Reads ALL evaluation CSV+JSON pairs from results/ and generates:
+  - RESULTS.md  — summary comparison table: rows=conversations, columns=api models
+  - results/<conv>_<model>.md  — full per-run detail pages
 
-Structure of RESULTS.md:
-  - Header with aggregate stats
-  - Summary table (one row per conversation)
-  - Metrics breakdown (aggregated)
-  - Per-conversation collapsible sections (each with its own graphs)
+Each CSV+JSON pair represents one (conversation, provider/model) run.
+Provider and model are extracted from configuration.llm.* and configuration.api.* in the JSON.
 """
 
 import argparse
@@ -18,8 +15,8 @@ import csv
 import json
 import re
 import sys
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 try:
     import yaml
@@ -78,7 +75,8 @@ def load_scenarios(scenario_file: Path) -> dict:
 # ── Run discovery ─────────────────────────────────────────────────────────────
 
 class ConvRun:
-    """One CSV+JSON+graphs bundle representing a single evaluated conversation."""
+    """One CSV+JSON+graphs bundle for a single (conversation, model) run."""
+
     def __init__(self, csv_path: Path, json_path: Path):
         self.csv_path = csv_path
         self.json_path = json_path
@@ -87,6 +85,15 @@ class ConvRun:
         self.rows = load_csv(csv_path)
         self.summary = load_json(json_path)
         self.gid = self.rows[0].get("conversation_group_id", "?") if self.rows else "?"
+
+        cfg = self.summary.get("configuration", {})
+        self.api_model = cfg.get("api", {}).get("model", "unknown")
+        self.api_provider = cfg.get("api", {}).get("provider", "unknown")
+        self.llm_provider = cfg.get("llm", {}).get("provider", "unknown")
+        self.llm_model = cfg.get("llm", {}).get("model", "unknown")
+
+        # Label for table columns and file names
+        self.model_label = self.api_model
 
     @property
     def graphs(self) -> dict[str, Path]:
@@ -98,18 +105,23 @@ class ConvRun:
                 result[m.group(1)] = g
         return result
 
+    @property
+    def overall(self) -> dict:
+        return self.summary.get("summary_stats", {}).get("overall", {})
+
+    @property
+    def pass_rate(self) -> float:
+        return self.overall.get("pass_rate", 0.0)
+
 
 def find_all_runs(results_dir: Path) -> list[ConvRun]:
-    """
-    Find all CSV+JSON pairs in results_dir (flat layout, one pair per conversation).
-    For each conversation_group_id, keep only the LATEST run.
-    """
+    """Find ALL CSV+JSON pairs, keeping the latest per (gid, api_model)."""
     csvs = sorted(results_dir.rglob("evaluation_*_detailed.csv"), reverse=True)
-    jsons_by_prefix = {}
+    jsons_by_prefix: dict[str, Path] = {}
     for j in results_dir.rglob("evaluation_*_summary.json"):
         jsons_by_prefix[extract_prefix(j)] = j
 
-    seen_gids: set[str] = set()
+    seen: set[tuple] = set()
     runs: list[ConvRun] = []
 
     for csv_path in csvs:
@@ -118,11 +130,12 @@ def find_all_runs(results_dir: Path) -> list[ConvRun]:
         if not json_path:
             continue
         run = ConvRun(csv_path, json_path)
-        if run.gid not in seen_gids:
-            seen_gids.add(run.gid)
+        key = (run.gid, run.api_model)
+        if key not in seen:
+            seen.add(key)
             runs.append(run)
 
-    return sorted(runs, key=lambda r: r.gid)
+    return sorted(runs, key=lambda r: (r.gid, r.api_model))
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
@@ -186,15 +199,14 @@ def fmt_tool_calls(tool_calls: list) -> list[str]:
     return lines
 
 
-# ── Per-scenario detail page ──────────────────────────────────────────────────
+# ── Per-run detail page ───────────────────────────────────────────────────────
 
-def generate_scenario_md(run: ConvRun, sc: dict, output: Path) -> None:
-    """Write a full detail page for one conversation to results/<name>.md."""
-    s_overall = run.summary.get("summary_stats", {}).get("overall", {})
-    tot = s_overall.get("TOTAL", 0)
-    p = s_overall.get("PASS", 0)
-    f = s_overall.get("FAIL", 0)
-    e = s_overall.get("ERROR", 0)
+def generate_detail_md(run: ConvRun, sc: dict, output: Path) -> None:
+    o = run.overall
+    tot = o.get("TOTAL", 0)
+    p = o.get("PASS", 0)
+    f = o.get("FAIL", 0)
+    e = o.get("ERROR", 0)
     rate = f"{p/tot*100:.0f}%" if tot else "—"
     icon = "✅" if f + e == 0 else "❌"
     desc = sc.get("_description", "")
@@ -202,6 +214,8 @@ def generate_scenario_md(run: ConvRun, sc: dict, output: Path) -> None:
     lines: list[str] = [
         f"# {icon} {run.gid}",
         "",
+        f"**OLS model:** `{run.api_provider}/{run.api_model}` &nbsp;|&nbsp; "
+        f"**Judge:** `{run.llm_provider}/{run.llm_model}`  ",
         f"**Run:** {run.timestamp} &nbsp;|&nbsp; "
         f"**Evaluations:** {tot} &nbsp;|&nbsp; "
         f"✅ {p} PASS &nbsp; ❌ {f} FAIL &nbsp; ⚠️ {e} ERROR &nbsp; ({rate})",
@@ -210,15 +224,15 @@ def generate_scenario_md(run: ConvRun, sc: dict, output: Path) -> None:
         lines += ["", f"> {desc}"]
     lines += ["", "---", ""]
 
-    # Graphs
+    # Primary graph inline, rest collapsed
     graphs = run.graphs
-    primary_key = next((k for k in ["pass_rates", "status_breakdown"] if k in graphs), None)
-    if primary_key:
-        g = graphs[primary_key]
-        label = primary_key.replace("_", " ").title()
+    primary = next((k for k in ["pass_rates", "status_breakdown"] if k in graphs), None)
+    if primary:
+        g = graphs[primary]
+        label = primary.replace("_", " ").title()
         rel = g.relative_to(output.parent)
         lines += [f"## {label}", "", f"![{label}]({rel})", ""]
-    other_graphs = {k: v for k, v in graphs.items() if k != primary_key}
+    other_graphs = {k: v for k, v in graphs.items() if k != primary}
     if other_graphs:
         lines += ["<details>", "<summary>More graphs</summary>", ""]
         for key, g in sorted(other_graphs.items()):
@@ -313,114 +327,144 @@ def generate_scenario_md(run: ConvRun, sc: dict, output: Path) -> None:
             ]
 
     lat = run.summary.get("summary_stats", {}).get("agent_latency_stats", {})
-    o = s_overall
-    lines += [
-        "---",
-        "",
+    lines += ["---", "",
         f"*Tokens — Judge: {o.get('total_judge_llm_tokens',0):,} | "
         f"API: {o.get('total_api_tokens',0):,} | "
-        f"Total: {o.get('total_tokens',0):,}*",
-    ]
+        f"Total: {o.get('total_tokens',0):,}*"]
     if lat:
-        lines.append(
-            f"*Latency — mean: {lat.get('mean',0):.1f}s | "
-            f"median: {lat.get('median',0):.1f}s | "
-            f"p95: {lat.get('p95',0):.1f}s*"
-        )
+        lines.append(f"*Latency — mean: {lat.get('mean',0):.1f}s | p95: {lat.get('p95',0):.1f}s*")
 
     output.write_text("\n".join(lines), encoding="utf-8")
     print(f"  ✓ {output.name}")
 
 
-# ── Root summary page ─────────────────────────────────────────────────────────
+# ── Root summary RESULTS.md ───────────────────────────────────────────────────
 
-def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
-    if not runs:
-        print("ERROR: No runs found", file=sys.stderr)
-        sys.exit(1)
+def generate_summary_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
+    """Comparison table: rows=conversations, columns=api models."""
 
-    # ── Aggregate stats across all runs ──────────────────────────────────────
-    total_pass = total_fail = total_error = total_evals = 0
-    metric_agg: dict[str, dict] = defaultdict(lambda: {"pass": 0, "fail": 0, "error": 0, "scores": []})
-    conv_stats: dict[str, dict] = {}
+    # Collect unique conversations and models
+    all_gids = sorted(set(r.gid for r in runs))
+    all_models = sorted(set(r.model_label for r in runs))
 
+    # Build lookup: (gid, model) → run
+    run_index: dict[tuple, ConvRun] = {}
     for run in runs:
-        o = run.summary.get("summary_stats", {}).get("overall", {})
-        total_pass += o.get("PASS", 0)
-        total_fail += o.get("FAIL", 0)
-        total_error += o.get("ERROR", 0)
-        total_evals += o.get("TOTAL", 0)
-        conv_stats[run.gid] = {
-            "pass": o.get("PASS", 0), "fail": o.get("FAIL", 0),
-            "error": o.get("ERROR", 0), "total": o.get("TOTAL", 0),
-            "timestamp": run.timestamp,
-        }
-        for m, s in run.summary.get("summary_stats", {}).get("by_metric", {}).items():
-            metric_agg[m]["pass"] += s.get("pass", 0)
-            metric_agg[m]["fail"] += s.get("fail", 0)
-            metric_agg[m]["error"] += s.get("error", 0)
-            mean = s.get("score_statistics", {}).get("mean")
-            if mean is not None:
-                metric_agg[m]["scores"].append(float(mean))
+        run_index[(run.gid, run.model_label)] = run
 
-    latest_ts = runs[-1].timestamp if runs else "—"
-    lines: list[str] = []
+    # Aggregate totals per model across all conversations
+    model_totals: dict[str, dict] = {m: {"pass": 0, "fail": 0, "error": 0, "total": 0} for m in all_models}
+    for run in runs:
+        o = run.overall
+        mt = model_totals[run.model_label]
+        mt["pass"] += o.get("PASS", 0)
+        mt["fail"] += o.get("FAIL", 0)
+        mt["error"] += o.get("ERROR", 0)
+        mt["total"] += o.get("TOTAL", 0)
 
-    # ── Header ────────────────────────────────────────────────────────────────
-    lines += [
+    latest_ts = max(r.timestamp for r in runs) if runs else "—"
+
+    lines: list[str] = [
         "# Evaluation Results",
         "",
-        f"**Latest run:** {latest_ts} &nbsp;|&nbsp; "
-        f"**Conversations:** {len(runs)} &nbsp;|&nbsp; "
-        f"**Evaluations:** {total_evals} &nbsp;|&nbsp; "
-        f"✅ {total_pass} &nbsp; ❌ {total_fail} &nbsp; ⚠️ {total_error}",
+        f"**Latest run:** {latest_ts} &nbsp;|&nbsp; **Conversations:** {len(all_gids)} &nbsp;|&nbsp; **Models tested:** {len(all_models)}",
         "",
         "---",
         "",
+        "## Summary by Model",
+        "",
     ]
 
-    # ── Summary table ─────────────────────────────────────────────────────────
-    lines += ["## Summary", ""]
-    lines += ["| Conversation | Run | ✅ | ❌ | ⚠️ | Pass Rate |", "|---|---|---|---|---|---|"]
-    for run in runs:
-        s = conv_stats[run.gid]
-        tot = s["total"]
-        rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
-        icon = "✅" if s["fail"] + s["error"] == 0 else ("❌" if s["pass"] == 0 else "🟡")
-        lines.append(
-            f"| `{run.gid}` | {s['timestamp']} | {s['pass']} | {s['fail']} | {s['error']} | {icon} {rate} |"
-        )
+    # Model summary row
+    lines += ["| Model | Judge | ✅ Pass | ❌ Fail | ⚠️ Error | Pass Rate |", "|---|---|---|---|---|---|"]
+    for model in all_models:
+        # Find a representative run to get judge info
+        rep = next((r for r in runs if r.model_label == model), None)
+        judge = f"`{rep.llm_provider}/{rep.llm_model}`" if rep else "—"
+        mt = model_totals[model]
+        tot = mt["total"]
+        rate = f"{mt['pass']/tot*100:.0f}%" if tot else "—"
+        icon = "✅" if mt["fail"] + mt["error"] == 0 else ("❌" if mt["pass"] == 0 else "🟡")
+        lines.append(f"| `{model}` | {judge} | {mt['pass']} | {mt['fail']} | {mt['error']} | {icon} {rate} |")
     lines.append("")
 
-    # ── Metrics breakdown (aggregated) ────────────────────────────────────────
-    lines += ["## Metrics Breakdown", ""]
-    lines += ["| Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |", "|---|---|---|---|---|---|"]
-    for metric, s in sorted(metric_agg.items()):
-        tot = s["pass"] + s["fail"] + s["error"]
-        rate = s["pass"] / tot * 100 if tot else 0
-        icon = "✅" if rate == 100 else ("❌" if rate == 0 else "🟡")
-        mean_str = f"{sum(s['scores'])/len(s['scores']):.2f}" if s["scores"] else "—"
-        lines.append(
-            f"| `{metric}` | {s['pass']} | {s['fail']} | {s['error']} | {icon} {rate:.0f}% | {mean_str} |"
-        )
+    # Comparison table: rows=conversations, columns=models
+    lines += ["## Results by Conversation and Model", ""]
+    header = "| Conversation | " + " | ".join(f"`{m}`" for m in all_models) + " |"
+    sep = "|---|" + "|".join("---" for _ in all_models) + "|"
+    lines += [header, sep]
+
+    for gid in all_gids:
+        desc = scenarios.get(gid, {}).get("_description", "")
+        cells = []
+        for model in all_models:
+            run = run_index.get((gid, model))
+            if run:
+                o = run.overall
+                tot = o.get("TOTAL", 0)
+                p = o.get("PASS", 0)
+                f = o.get("FAIL", 0)
+                e = o.get("ERROR", 0)
+                rate_pct = f"{p/tot*100:.0f}%" if tot else "—"
+                icon = "✅" if f + e == 0 else ("❌" if p == 0 else "🟡")
+                # Link to detail page
+                safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", model)
+                detail = f"results/{gid}_{safe_model}.md"
+                cells.append(f"[{icon} {rate_pct} ({p}/{tot})]({detail})")
+            else:
+                cells.append("—")
+        row_label = f"`{gid}`"
+        lines.append("| " + row_label + " | " + " | ".join(cells) + " |")
     lines.append("")
 
-    # ── Links to per-scenario detail pages ───────────────────────────────────
-    lines += ["## Scenario Details", ""]
-    for run in runs:
-        sc = scenarios.get(run.gid, {})
-        s = conv_stats[run.gid]
-        tot = s["total"]
-        rate = f"{s['pass']/tot*100:.0f}%" if tot else "—"
-        icon = "✅" if s["fail"] + s["error"] == 0 else "❌"
-        desc = sc.get("_description", "")
-        detail_link = f"results/{run.gid}.md"
+    if len(all_models) > 1:
+        lines += ["## Metric Breakdown by Model", ""]
+        # Collect all metrics across all runs
+        all_metrics: list[str] = []
+        for run in runs:
+            for m in run.summary.get("summary_stats", {}).get("by_metric", {}).keys():
+                if m not in all_metrics:
+                    all_metrics.append(m)
+
+        h2 = "| Metric | " + " | ".join(f"`{m}`" for m in all_models) + " |"
+        s2 = "|---|" + "|".join("---" for _ in all_models) + "|"
+        lines += [h2, s2]
+        for metric in sorted(all_metrics):
+            cells = []
+            for model in all_models:
+                model_runs = [r for r in runs if r.model_label == model]
+                p = sum(r.summary.get("summary_stats",{}).get("by_metric",{}).get(metric,{}).get("pass",0) for r in model_runs)
+                f = sum(r.summary.get("summary_stats",{}).get("by_metric",{}).get(metric,{}).get("fail",0) for r in model_runs)
+                e = sum(r.summary.get("summary_stats",{}).get("by_metric",{}).get(metric,{}).get("error",0) for r in model_runs)
+                tot = p + f + e
+                if tot:
+                    rate = p / tot * 100
+                    icon = "✅" if rate == 100 else ("❌" if rate == 0 else "🟡")
+                    cells.append(f"{icon} {rate:.0f}% ({p}/{tot})")
+                else:
+                    cells.append("—")
+            lines.append("| `" + metric + "` | " + " | ".join(cells) + " |")
+        lines.append("")
+
+    lines += ["## Scenario Detail Pages", ""]
+    for gid in all_gids:
+        desc = scenarios.get(gid, {}).get("_description", "")
         desc_str = f" — {desc}" if desc else ""
-        lines.append(
-            f"- [{icon} **{run.gid}**]({detail_link})"
-            f" — {rate} ({s['pass']}/{tot}) — {run.timestamp}{desc_str}"
-        )
-    lines += ["", "*Generated by `scripts/generate_results.py`*"]
+        lines.append(f"### `{gid}`{desc_str}")
+        lines.append("")
+        for model in all_models:
+            run = run_index.get((gid, model))
+            if run:
+                safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", model)
+                detail = f"results/{gid}_{safe_model}.md"
+                o = run.overall
+                p, tot = o.get("PASS", 0), o.get("TOTAL", 0)
+                rate = f"{p/tot*100:.0f}%" if tot else "—"
+                icon = "✅" if o.get("FAIL",0) + o.get("ERROR",0) == 0 else "❌"
+                lines.append(f"- [{icon} `{model}` — {rate} ({p}/{tot})]({detail}) — {run.timestamp}")
+        lines.append("")
+
+    lines += ["*Generated by `scripts/generate_results.py`*"]
     output.write_text("\n".join(lines), encoding="utf-8")
     print(f"✓ RESULTS.md written to {output}")
 
@@ -429,7 +473,7 @@ def generate_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
 
 def main() -> None:
     root = Path(__file__).parent.parent
-    parser = argparse.ArgumentParser(description="Generate RESULTS.md")
+    parser = argparse.ArgumentParser(description="Generate RESULTS.md with multi-model comparison")
     parser.add_argument("--results-dir", default=str(root / "results"))
     parser.add_argument("--scenarios-dir", default=str(root / "scenarios"))
     parser.add_argument("--output", default=str(root / "RESULTS.md"))
@@ -444,8 +488,14 @@ def main() -> None:
         print(f"ERROR: No CSV/JSON pairs found in {results_dir}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Found {len(runs)} conversation run(s): {', '.join(r.gid for r in runs)}")
+    # Summary of what was found
+    model_conv = defaultdict(list)
+    for r in runs:
+        model_conv[r.model_label].append(r.gid)
+    for model, convs in sorted(model_conv.items()):
+        print(f"  {model}: {', '.join(sorted(convs))}")
 
+    # Load scenario metadata
     all_scenarios: dict = {}
     if scenarios_dir.exists():
         conv_file = scenarios_dir / "conversations.yaml"
@@ -457,15 +507,16 @@ def main() -> None:
                 if ef.exists():
                     all_scenarios.update(load_scenarios(ef))
 
-    # Generate per-scenario detail pages inside results/
-    print("Generating scenario detail pages:")
+    # Generate per-run detail pages
+    print("Generating detail pages:")
     for run in runs:
         sc = all_scenarios.get(run.gid, {})
-        detail_output = results_dir / f"{run.gid}.md"
-        generate_scenario_md(run, sc, detail_output)
+        safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", run.model_label)
+        detail_output = results_dir / f"{run.gid}_{safe_model}.md"
+        generate_detail_md(run, sc, detail_output)
 
-    # Generate root summary RESULTS.md
-    generate_md(runs, all_scenarios, output)
+    # Generate root summary
+    generate_summary_md(runs, all_scenarios, output)
 
 
 if __name__ == "__main__":

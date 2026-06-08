@@ -27,8 +27,7 @@
 ## Scenario Details
 
 <details>
-<summary><b>✅ check_mesh_status</b> — 100% (3/3) — 2026-06-08 11:58:47  
-Single-turn health check: agent reports the overall mesh and service health.</summary>
+<summary><b>✅ check_mesh_status</b> — 100% (3/3) — 2026-06-08 11:58:47 — Single-turn health check: agent reports the overall mesh and service health.</summary>
 
 <details>
 <summary>📊 Graphs</summary>
@@ -132,8 +131,7 @@ The agent should report the current health status of the Istio service mesh by q
 </details>
 
 <details>
-<summary><b>✅ fix_bookinfo_fault_injection</b> — 100% (11/11) — 2026-06-08 12:08:47  
-Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.</summary>
+<summary><b>✅ fix_bookinfo_fault_injection</b> — 100% (11/11) — 2026-06-08 12:08:47 — Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.</summary>
 
 <details>
 <summary>📊 Graphs</summary>
@@ -397,8 +395,7 @@ The agent should remove the fault injection rule from the ratings VirtualService
 </details>
 
 <details>
-<summary><b>✅ fix_bookinfo_routing</b> — 100% (11/11) — 2026-06-08 11:58:02  
-Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights.</summary>
+<summary><b>✅ fix_bookinfo_routing</b> — 100% (11/11) — 2026-06-08 11:58:02 — Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights.</summary>
 
 <details>
 <summary>📊 Graphs</summary>

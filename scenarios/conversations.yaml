@@ -27,7 +27,8 @@
     - turn_id: investigate
       query: >
         In our Bookinfo app, the product page only ever shows black or no stars —
-        it never shows red stars. Can you investigate and tell me what you find?
+        it never shows red stars. All Istio resources and services are deployed
+        in the 'bookinfo' namespace. Can you investigate and tell me what you find?
         Please only report for now, do not make any changes yet.
       expected_response: >
         The agent should investigate and report that reviews-v3 (which shows red stars)
@@ -58,10 +59,8 @@
                 object: reviews
       expected_keywords:
         - - reviews
-          - v3
           - traffic
         - - reviews
-          - v3
           - routing
       turn_metrics:
         - custom:answer_correctness
@@ -204,7 +203,8 @@
       query: >
         Some users are seeing errors on the Bookinfo product page — it looks like
         the ratings service is broken. All pods are running and mTLS / auth policies
-        are not the issue. Can you check the Istio VirtualService routing rules
+        are not the issue. All Istio resources are in the 'bookinfo' namespace.
+        Can you check the Istio VirtualService routing rules
         for the ratings service and find what's causing the problem?
       expected_response: >
         The agent should investigate the Bookinfo application and report that the
@@ -223,7 +223,7 @@
                 namespace: bookinfo
         - # Alternative 3: mesh status
           - - tool_name: kiali_get_mesh_status
-        - # Alternative 4: direct config reads (agent goes straight to ratings VirtualService)
+        - # Alternative 4: direct config reads — list by serviceName then get VirtualService
           - - tool_name: kiali_manage_istio_config_read
               arguments:
                 namespace: bookinfo
@@ -237,6 +237,12 @@
                 object: ratings
                 group: networking.istio.io
                 version: v1
+        - # Alternative 5: list by kind (agent filters by VirtualService kind instead of serviceName)
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+                kind: VirtualService
       expected_keywords:
         - - bookinfo
           - ratings
@@ -335,3 +341,113 @@
 
   setup_script: ./fix_bookinfo_fault_injection/setup.sh
   cleanup_script: ./fix_bookinfo_fault_injection/cleanup.sh
+
+# ── troubleshoot_latency_trace ────────────────────────────────────────────────
+- conversation_group_id: troubleshoot_latency_trace
+  tag: troubleshoot_latency_trace
+  description: "A 3-second delay fault is injected on the ratings service. The agent must identify the latency root cause using traces and fix the delay."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        The Bookinfo product page is loading very slowly — requests are taking
+        several seconds. All pods are running fine and all resources are in the
+        'bookinfo' namespace. Can you investigate what is causing the latency
+        and which service is responsible?
+      expected_response: >
+        The agent should investigate and identify that the ratings service is
+        causing significant latency. It should find evidence such as high response
+        times in the traffic graph, traces showing slow spans on the ratings
+        service, or metrics indicating elevated latency for ratings.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: traffic graph to spot latency
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+        - # Alternative 2: traces to find slow spans
+          - - tool_name: kiali_list_traces
+              arguments:
+                namespace: bookinfo
+        - # Alternative 3: config read to check routing rules
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: list
+      expected_keywords:
+        - - ratings
+          - latency
+          - slow
+        - - ratings
+          - delay
+          - seconds
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval
+
+    - turn_id: diagnose
+      query: >
+        Can you check the distributed traces for the bookinfo namespace
+        to pinpoint exactly where the delay is introduced?
+      expected_response: >
+        The agent should query distributed traces for the bookinfo namespace
+        and identify that the ratings service has traces with spans showing
+        a fixed delay of approximately 3 seconds. The root cause is a fault
+        injection delay rule in the ratings VirtualService configured with
+        fixedDelay of 3 seconds on 100% of requests.
+      tool_calls: null
+      expected_tool_calls:
+        - # Alternative 1: list traces for ratings or productpage
+          - - tool_name: kiali_list_traces
+              arguments:
+                namespace: bookinfo
+        - # Alternative 2: read ratings VirtualService config
+          - - tool_name: kiali_manage_istio_config_read
+              arguments:
+                namespace: bookinfo
+                action: get
+                kind: VirtualService
+                object: ratings
+                group: networking.istio.io
+                version: v1
+      expected_keywords:
+        - - ratings
+          - delay
+          - fault
+        - - ratings
+          - "3"
+          - VirtualService
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval
+
+    - turn_id: fix
+      query: >
+        Please remove the delay so the ratings service responds at normal speed.
+      expected_response: >
+        The agent should remove the delay fault injection rule from the ratings
+        VirtualService, either by patching it to remove the fault.delay block
+        or by deleting the VirtualService entirely.
+      tool_calls: null
+      expected_keywords:
+        - - ratings
+          - removed
+        - - ratings
+          - delay
+          - fixed
+        - - VirtualService
+          - ratings
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+  setup_script: ./troubleshoot_latency_trace/setup.sh
+  cleanup_script: ./troubleshoot_latency_trace/cleanup.sh

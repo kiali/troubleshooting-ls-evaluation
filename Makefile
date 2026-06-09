@@ -151,10 +151,17 @@ setup-dashboard:
 run-dashboard:
 	@[ -d dashboard/node_modules ] || \
 	  (printf '\033[0;31mERROR:\033[0m Dashboard not set up. Run: make setup-dashboard\n'; exit 1)
+	@printf 'Collecting results from provider subfolders into dashboard_results/...\n'; \
+	mkdir -p dashboard_results/graphs; \
+	for dir in results/*/; do \
+	  [ -d "$$dir" ] || continue; \
+	  find "$$dir" -maxdepth 1 \( -name '*.json' -o -name '*.csv' \) -exec cp -v {} dashboard_results/ \; ; \
+	  [ -d "$${dir}graphs" ] && find "$${dir}graphs" -maxdepth 1 -type f -exec cp -v {} dashboard_results/graphs/ \; || true; \
+	done
 	cd dashboard && \
 	  LS_EVAL_SYSTEM_CFG_PATH=../system.yaml \
 	  LS_EVAL_DATA_PATH=../scenarios/conversations.yaml \
-	  LS_EVAL_REPORTS_PATH=../results \
+	  LS_EVAL_REPORTS_PATH=../dashboard_results \
 	  LS_EVAL_DASHBOARD_RUN_ENABLED=true \
 	  OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
 	  GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \

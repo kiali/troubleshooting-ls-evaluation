@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](openai/graphs/evaluation_20260609_161607_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260609_161607_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](openai/graphs/evaluation_20260609_161607_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260609_161607_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](openai/graphs/evaluation_20260609_161607_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260609_161607_status_breakdown.png)
 
 </details>
 

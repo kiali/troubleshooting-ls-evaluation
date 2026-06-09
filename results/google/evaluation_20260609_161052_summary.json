@@ -1,0 +1,557 @@
+{
+  "timestamp": "2026-06-09T16:10:48.108348+00:00",
+  "total_evaluations": 11,
+  "summary_stats": {
+    "overall": {
+      "TOTAL": 11,
+      "PASS": 11,
+      "FAIL": 0,
+      "ERROR": 0,
+      "SKIPPED": 0,
+      "pass_rate": 100.0,
+      "fail_rate": 0.0,
+      "error_rate": 0.0,
+      "skipped_rate": 0.0,
+      "total_judge_llm_input_tokens": 20303,
+      "total_judge_llm_output_tokens": 14928,
+      "total_judge_llm_tokens": 35231,
+      "total_embedding_tokens": 0,
+      "total_api_input_tokens": 53992,
+      "total_api_output_tokens": 861,
+      "total_api_tokens": 54853,
+      "total_tokens": 90084
+    },
+    "by_metric": {
+      "custom:answer_correctness": {
+        "pass": 3,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 3,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": {
+            "low": 1.0,
+            "mean": 1.0,
+            "high": 1.0,
+            "confidence_level": 95.0
+          }
+        }
+      },
+      "custom:keywords_eval": {
+        "pass": 3,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 3,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": {
+            "low": 1.0,
+            "mean": 1.0,
+            "high": 1.0,
+            "confidence_level": 95.0
+          }
+        }
+      },
+      "custom:tool_eval": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "deepeval:conversation_completeness": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "deepeval:conversation_relevancy": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "deepeval:knowledge_retention": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "geval:troubleshooting_continuity": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      }
+    },
+    "by_conversation": {
+      "fix_bookinfo_routing": {
+        "pass": 11,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0
+      }
+    },
+    "by_tag": {
+      "fix_bookinfo_routing": {
+        "pass": 11,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 11,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": {
+            "low": 1.0,
+            "mean": 1.0,
+            "high": 1.0,
+            "confidence_level": 95.0
+          }
+        }
+      }
+    },
+    "agent_latency_stats": {
+      "count": 3,
+      "mean": 20.405395716999994,
+      "median": 20.12874651300001,
+      "std": 6.543211385622364,
+      "min": 14.004896712999994,
+      "max": 27.08254392499998,
+      "p95": 26.387164183799985,
+      "p99": 26.943467976759983
+    }
+  },
+  "configuration": {
+    "llm": {
+      "provider": "vertex",
+      "model": "gemini-2.5-pro",
+      "ssl_verify": true,
+      "ssl_cert_file": null,
+      "temperature": 0.0,
+      "max_tokens": 5000,
+      "timeout": 300,
+      "num_retries": 3,
+      "cache_enabled": true,
+      "parameters": {
+        "temperature": 0.0,
+        "max_completion_tokens": 5000
+      }
+    },
+    "embedding": {
+      "provider": "openai",
+      "model": "text-embedding-3-small",
+      "provider_kwargs": null,
+      "cache_enabled": false
+    },
+    "api": {
+      "api_base": "http://0.0.0.0:8080",
+      "version": "v1",
+      "endpoint_type": "query",
+      "timeout": 300,
+      "provider": "google_vertex",
+      "model": "gemini-2.5-pro",
+      "no_tools": null,
+      "system_prompt": null,
+      "extra_request_params": {
+        "mode": "troubleshooting"
+      },
+      "cache_enabled": false,
+      "num_retries": 3,
+      "enabled": true,
+      "mcp_headers": null
+    }
+  },
+  "results": [
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "investigate",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 38.89139309699999,
+      "evaluation_latency": 11.80884917200001,
+      "judge_llm_input_tokens": 537,
+      "judge_llm_output_tokens": 1133,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Custom answer correctness: 1.00 - The response is perfectly aligned with the expected answer and provides a comprehensive and accurate analysis of the problem.",
+          "judge_input_tokens": 537,
+          "judge_output_tokens": 1133,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 27.08254392499998,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "investigate",
+      "metric_identifier": "custom:keywords_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 27.082619996999938,
+      "evaluation_latency": 7.60719999561843e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Keywords eval successful: Option 1 - all keywords matched: 'reviews', 'traffic'",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 27.08254392499998,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 35.28055589199994,
+      "evaluation_latency": 15.151809378999928,
+      "judge_llm_input_tokens": 645,
+      "judge_llm_output_tokens": 1467,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Custom answer correctness: 1.00 - The response is factually correct, complete, and perfectly aligned with the expected response. It correctly identifies the `VirtualService` for the `reviews` service as the root cause and accurately explains that the traffic weights are configured to send 50% of traffic to `v1` and 50% to `v2`, leaving 0% for the `v3` subset. The response enhances the explanation by providing a relevant YAML snippet and clarifying the role of the `DestinationRule`, making it even more comprehensive than the expected response. There is no contradictory information.",
+          "judge_input_tokens": 645,
+          "judge_output_tokens": 1467,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 20.12874651300001,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:keywords_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 20.12880541300001,
+      "evaluation_latency": 5.8899999999084685e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Keywords eval successful: Option 1 - all keywords matched: 'reviews', 'v3', 'weight', '0'",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 20.12874651300001,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:tool_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 20.129087861000016,
+      "evaluation_latency": 0.00034134800000629184,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Primary pattern matched: Tool calls: 2/2 expected matched, 0 unmatched: none, 1 extra in response: [kiali_manage_istio_config_read] (partial, unordered)",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 20.12874651300001,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "fix",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 26.712731229000042,
+      "evaluation_latency": 12.707834516000048,
+      "judge_llm_input_tokens": 268,
+      "judge_llm_output_tokens": 1041,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Custom answer correctness: 1.00 - The response is perfectly aligned with the user's request and the expected response. It correctly identifies the `reviews` `VirtualService` as the resource to modify. It then applies the correct configuration, splitting the traffic as equally as possible (34/33/33) across the three versions, which is the standard way to achieve this. The confirmation is clear, factually accurate, and provides all the necessary details.",
+          "judge_input_tokens": 268,
+          "judge_output_tokens": 1041,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 14.004896712999994,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": "fix",
+      "metric_identifier": "custom:keywords_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 14.004951344999995,
+      "evaluation_latency": 5.463200000122015e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Keywords eval successful: Option 1 - all keywords matched: 'reviews', 'v3', 'weight'",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 14.004896712999994,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": null,
+      "metric_identifier": "geval:troubleshooting_continuity",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 71.95368775700001,
+      "evaluation_latency": 10.737500606000026,
+      "judge_llm_input_tokens": 1432,
+      "judge_llm_output_tokens": 1014,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "The agent demonstrates perfect continuity. It correctly identifies the `VirtualService` misconfiguration in the first turn, provides a more detailed explanation with a YAML snippet in the second turn when asked for the 'exact root cause', and then applies the requested fix to that same resource in the third turn. It consistently references its previous findings without repeating diagnostic steps.",
+          "judge_input_tokens": 1432,
+          "judge_output_tokens": 1014,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 61.216187150999986,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": null,
+      "metric_identifier": "deepeval:conversation_relevancy",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": 0.7,
+      "execution_time": 70.71891081199999,
+      "evaluation_latency": 9.502723661000005,
+      "judge_llm_input_tokens": 4306,
+      "judge_llm_output_tokens": 1810,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "The score is 1.0 because there were no irrelevancies found in the assistant's messages.",
+          "judge_input_tokens": 4306,
+          "judge_output_tokens": 1810,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 61.216187150999986,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": null,
+      "metric_identifier": "deepeval:knowledge_retention",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": 0.6,
+      "execution_time": 115.16387948399995,
+      "evaluation_latency": 53.947692332999964,
+      "judge_llm_input_tokens": 6476,
+      "judge_llm_output_tokens": 4879,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "The score is 1.00 because there were no attritions, indicating the model perfectly retained all previously established knowledge throughout the conversation.",
+          "judge_input_tokens": 6476,
+          "judge_output_tokens": 4879,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 61.216187150999986,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "fix_bookinfo_routing",
+      "tag": "fix_bookinfo_routing",
+      "turn_id": null,
+      "metric_identifier": "deepeval:conversation_completeness",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": 0.6,
+      "execution_time": 87.58531298800006,
+      "evaluation_latency": 26.36912583700007,
+      "judge_llm_input_tokens": 6639,
+      "judge_llm_output_tokens": 3584,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "The score is 1.0 because the LLM response fully satisfied all user intentions. It successfully investigated the issue with the Bookinfo application, identified the root cause within the Istio routing configuration, and then provided a complete fix to ensure traffic was distributed equally as the user requested.",
+          "judge_input_tokens": 6639,
+          "judge_output_tokens": 3584,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 61.216187150999986,
+      "tokens_per_second": null
+    }
+  ]
+}

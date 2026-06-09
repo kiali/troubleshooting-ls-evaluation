@@ -13,6 +13,47 @@ Responses are scored with LLM-based metrics (`custom:answer_correctness`,
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph cluster["Kubernetes / kind cluster"]
+        KIALI["Kiali\nobservability console"]
+        ISTIO["Istio\nservice mesh"]
+        BOOKINFO["Bookinfo\napplication"]
+        ISTIO --- BOOKINFO
+        KIALI -->|reads mesh data| ISTIO
+    end
+
+    subgraph ols_stack["OLS Stack (local / CI)"]
+        MCP["Kubernetes MCP Server\nport 8089\n(kiali toolset)"]
+        RAG["Kiali RAG Vector DB\nkiali-byok image"]
+        OLS["OpenShift Lightspeed\nOLS Service  port 8080"]
+        MCP -->|MCP tools API| OLS
+        RAG -->|embeddings + index| OLS
+    end
+
+    subgraph eval["Evaluation (lightspeed-evaluation)"]
+        EVAL["lightspeed-eval\nframework"]
+        JUDGE["Judge LLM\nClaude Opus / Gemini\nvia Vertex AI"]
+        EVAL -->|scores responses| JUDGE
+    end
+
+    MCP -->|Kiali REST API| KIALI
+    EVAL -->|HTTP /query| OLS
+    OLS -->|uses tools| MCP
+```
+
+| Component | Role |
+|---|---|
+| **Kubernetes MCP Server** | Exposes Kiali observability tools via MCP protocol so OLS can query the mesh |
+| **Kiali RAG Vector DB** | Provides grounded Kiali/Istio documentation as embeddings for OLS responses |
+| **OpenShift Lightspeed (OLS)** | The AI troubleshooting agent under evaluation |
+| **lightspeed-evaluation** | Sends scenario queries to OLS and scores responses with the judge LLM |
+| **Judge LLM** | Independent model (Claude Opus / Gemini) that scores agent correctness |
+
+---
+
 ## LLM Configuration
 
 Two LLM providers are supported. Switch with `PROVIDER=openai` (default) or `PROVIDER=google`.

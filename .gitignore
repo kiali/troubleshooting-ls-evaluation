@@ -3,13 +3,18 @@ venv/
 
 dashboard/
 .caches/
-# Evaluation results and generated reports
-# (per-scenario RESULTS.md files live inside results/ which is already ignored)
-results/
-RESULTS.md
+# Evaluation data files — git-ignored
+results/*.csv
+results/*.json
+results/graphs/
+# Generated Markdown reports — committed (CI creates a PR with these)
+# RESULTS.md and results/*.md are NOT ignored so git add works normally
 
 # Vector database (extracted from kiali-byok image via make setup-vector-db)
 vector_db/
+
+# Embedding model (downloaded via make get-embeddings-model)
+embeddings_model/
 
 # Pip temp files
 /tmp/.pip-*.log

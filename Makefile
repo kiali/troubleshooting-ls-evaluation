@@ -154,7 +154,8 @@ get-embeddings-model: check-venv
 	@if [ -d embeddings_model ] && [ -n "$$(ls -A embeddings_model 2>/dev/null)" ]; then \
 	  printf '\033[0;33mSKIP\033[0m embeddings_model/ already exists. Remove it to re-download: rm -rf embeddings_model\n'; \
 	else \
-	  printf 'Installing sentence-transformers...\n'; \
+	  printf 'Installing sentence-transformers (CPU-only torch)...\n'; \
+	  venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu --quiet; \
 	  venv/bin/pip install sentence-transformers --quiet; \
 	  printf 'Downloading embedding model: %s\n' "$(EMBEDDING_MODEL)"; \
 	  venv/bin/python -c "\

@@ -219,6 +219,11 @@ jobs:
           # Install uv (Python task runner used by lightspeed-service)
           pip install uv --quiet
 
+          # Pin torch to CPU-only build before uv resolves deps.
+          # Without this, uv installs CUDA packages (nvidia-*) that are ~2 GB and useless on CI.
+          uv pip install --directory /tmp/ols-src \
+            torch --index-url https://download.pytorch.org/whl/cpu --quiet
+
           # Patch olsconfig:
           #  1. replace host.containers.internal with localhost (no container)
           #  2. replace relative credential paths with absolute paths

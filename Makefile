@@ -54,7 +54,10 @@ else ifeq ($(PROVIDER),google)
   OLS_PROVIDER_CONFIG_FILE = olsconfig-google.yaml
   SYSTEM_CONFIG             = system/system_google.yaml
 else
-  $(error Unknown PROVIDER "$(PROVIDER)". Supported values: openai, google)
+  # "all" is handled at the shell level (make all loops over providers).
+  # For targets that require a specific provider, check-provider will catch it.
+  OLS_PROVIDER_CONFIG_FILE = olsconfig-openai.yaml
+  SYSTEM_CONFIG             = system/system_openai.yaml
 endif
 
 # ── Include evaluation targets ─────────────────────────────────────────────────
@@ -65,11 +68,20 @@ EMBEDDING_MODEL ?= sentence-transformers/all-mpnet-base-v2
 .PHONY: setup setup-vector-db get-embeddings-model setup-dashboard run-dashboard run-ols run-mcp \
         check-venv check-openai-key check-services check-bookinfo check-provider
 
-# ── Provider info ─────────────────────────────────────────────────────────────
+# ── Provider info + validation ────────────────────────────────────────────────
+# Validates PROVIDER at runtime (not parse-time) so "make setup PROVIDER=all" works.
 check-provider:
-	@printf 'Provider:     \033[1m%s\033[0m\n' "$(PROVIDER)"
-	@printf 'OLS config:   olsconfig/%s\n' "$(OLS_PROVIDER_CONFIG_FILE)"
-	@printf 'System cfg:   %s\n' "$(SYSTEM_CONFIG)"
+	@case "$(PROVIDER)" in \
+	  openai|google) \
+	    printf 'Provider:     \033[1m%s\033[0m\n' "$(PROVIDER)"; \
+	    printf 'OLS config:   olsconfig/%s\n' "$(OLS_PROVIDER_CONFIG_FILE)"; \
+	    printf 'System cfg:   %s\n' "$(SYSTEM_CONFIG)"; \
+	    ;; \
+	  *) \
+	    printf '\033[0;31mERROR:\033[0m Unknown PROVIDER "%s". Supported: openai, google\n' "$(PROVIDER)"; \
+	    exit 1; \
+	    ;; \
+	esac
 
 # ── Environment guards ─────────────────────────────────────────────────────────
 

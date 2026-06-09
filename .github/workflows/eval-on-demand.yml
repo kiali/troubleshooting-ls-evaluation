@@ -48,8 +48,29 @@ permissions:
 
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 jobs:
+
+  # ── Prepare: compute provider matrix ─────────────────────────────────────────
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      providers: ${{ steps.matrix.outputs.providers }}
+    steps:
+      - id: matrix
+        run: |
+          if [ "${{ inputs.provider }}" = "all" ]; then
+            echo 'providers=["openai","google"]' >> $GITHUB_OUTPUT
+          else
+            echo 'providers=["${{ inputs.provider }}"]' >> $GITHUB_OUTPUT
+          fi
+
+  # ── Evaluate: runs once per provider in parallel ──────────────────────────────
   evaluate:
-    name: "${{ inputs.scenario }} / ${{ inputs.provider }}"
+    needs: prepare
+    strategy:
+      fail-fast: false   # don't cancel the other provider if one fails
+      matrix:
+        provider: ${{ fromJson(needs.prepare.outputs.providers) }}
+    name: "${{ inputs.scenario }} / ${{ matrix.provider }}"
     runs-on: ubuntu-latest        # replace with self-hosted if you need more RAM
 
     # Secrets required (set in repo Settings → Secrets and Variables → Actions):
@@ -61,7 +82,7 @@ jobs:
     env:
       CLUSTER:        kind
       KUBECTL:        kubectl   # use kubectl for kind, not oc
-      PROVIDER:       ${{ inputs.provider }}
+      PROVIDER:       ${{ matrix.provider }}   # from matrix, not raw input
       WAIT_SECONDS:   ${{ inputs.wait_seconds }}
       KIALI_ENDPOINT: ${{ inputs.kiali_endpoint }}
 
@@ -141,14 +162,13 @@ jobs:
           printf '%s' "$_GOOGLE_API_KEY"  > ~/.gemini/google_api_key.txt
           printf '%s' "$_GCP_CREDENTIALS" > ~/.gcp/gcp_credentials.txt
 
-          # Verify required files exist and are non-empty for the selected provider
-          PROVIDER_INPUT="${{ inputs.provider }}"
-          echo "Provider: $PROVIDER_INPUT"
-          if [ "$PROVIDER_INPUT" = "openai" ] || [ "$PROVIDER_INPUT" = "all" ]; then
+          # Verify required files for THIS matrix provider (PROVIDER env var)
+          echo "Provider: ${PROVIDER}"
+          if [ "${PROVIDER}" = "openai" ]; then
             [ -s ~/.openai/openai_api_key.txt ] || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
             echo "✓ openai_api_key.txt"
           fi
-          if [ "$PROVIDER_INPUT" = "google" ] || [ "$PROVIDER_INPUT" = "all" ]; then
+          if [ "${PROVIDER}" = "google" ]; then
             [ -s ~/.gemini/google_api_key.txt  ] || { echo "::error::GOOGLE_API_KEY secret is empty or not set"; exit 1; }
             [ -s ~/.gcp/gcp_credentials.txt    ] || { echo "::error::GCP_CREDENTIALS secret is empty or not set"; exit 1; }
             echo "✓ google_api_key.txt"
@@ -291,40 +311,22 @@ jobs:
           # Guard: recreate venv if it somehow disappeared
           [ -d venv ] || make setup
 
+          # Matrix sets PROVIDER — run exactly this one provider
           SCENARIO="${{ inputs.scenario }}"
-          INPUT_PROVIDER="${{ inputs.provider }}"
-
-          # Determine which providers to run
-          if [ "$INPUT_PROVIDER" = "all" ]; then
-            PROVIDERS="openai google"
+          echo "::group::Provider: ${PROVIDER} / Scenario: ${SCENARIO}"
+          if [ "$SCENARIO" = "all" ]; then
+            make all PROVIDER=${PROVIDER} WAIT_SECONDS=${WAIT_SECONDS}
           else
-            PROVIDERS="$INPUT_PROVIDER"
+            make ${SCENARIO} PROVIDER=${PROVIDER} WAIT_SECONDS=${WAIT_SECONDS}
           fi
-
-          for P in $PROVIDERS; do
-            echo "::group::Provider: $P"
-            if [ "$SCENARIO" = "all" ]; then
-              make all PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
-            else
-              make $SCENARIO PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
-            fi
-            echo "::endgroup::"
-          done
+          echo "::endgroup::"
 
       # ── 13. Generate report ───────────────────────────────────────────────────
       - name: Generate RESULTS.md
         if: success()
         run: |
-          INPUT_PROVIDER="${{ inputs.provider }}"
-          if [ "$INPUT_PROVIDER" = "all" ]; then
-            PROVIDERS="openai google"
-          else
-            PROVIDERS="$INPUT_PROVIDER"
-          fi
-          for P in $PROVIDERS; do
-            make generate-results PROVIDER=$P || true
-          done
-          # Regenerate the root RESULTS.md aggregating all providers
+          # Matrix sets PROVIDER — generate report for this provider only
+          make generate-results PROVIDER=${PROVIDER} || true
           python scripts/generate_results.py
 
       # ── 14. Open a Pull Request with the results ─────────────────────────────
@@ -362,16 +364,16 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           committer: "kiali-bot <kiali-dev@googlegroups.com>"
           author: "kiali-bot <kiali-dev@googlegroups.com>"
-          branch: "results/${{ inputs.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
-          commit-message: "results: ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
-          title: "📊 Results — ${{ inputs.scenario }} / ${{ inputs.provider }}"
+          branch: "results/${{ matrix.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
+          commit-message: "results: ${{ inputs.scenario }} / ${{ matrix.provider }} (run ${{ github.run_id }})"
+          title: "📊 Results — ${{ inputs.scenario }} / ${{ matrix.provider }}"
           body: |
             ## Evaluation run
 
             | | |
             |---|---|
             | **Scenario** | `${{ inputs.scenario }}` |
-            | **Provider** | `${{ inputs.provider }}` |
+            | **Provider** | `${{ matrix.provider }}` |
             | **Wait seconds** | `${{ inputs.wait_seconds }}` |
             | **Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
@@ -392,7 +394,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "results-${{ inputs.provider }}-${{ inputs.scenario }}-${{ github.run_id }}"
+          name: "results-${{ matrix.provider }}-${{ inputs.scenario }}-${{ github.run_id }}"
           path: |
             RESULTS.md
             results/

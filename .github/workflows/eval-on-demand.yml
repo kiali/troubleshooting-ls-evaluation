@@ -32,7 +32,7 @@ on:
       wait_seconds:
         description: "Seconds to wait after setup/cleanup for Kiali metrics (default 60 for CI)"
         required: false
-        default: "120"
+        default: "180"
         type: string
 
       kiali_endpoint:

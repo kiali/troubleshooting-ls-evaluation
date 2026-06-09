@@ -16,32 +16,24 @@ Responses are scored with LLM-based metrics (`custom:answer_correctness`,
 ## Architecture
 
 ```mermaid
-flowchart TB
-    subgraph cluster["Kubernetes / kind cluster"]
-        KIALI["Kiali\nobservability console"]
-        ISTIO["Istio\nservice mesh"]
-        BOOKINFO["Bookinfo\napplication"]
-        ISTIO --- BOOKINFO
-        KIALI -->|reads mesh data| ISTIO
-    end
+flowchart LR
+    BOOKINFO["Bookinfo app"]
+    ISTIO["Istio mesh"]
+    KIALI["Kiali"]
+    MCP["MCP Server :8089"]
+    RAG["Kiali RAG Vector DB"]
+    OLS["OLS Service :8080"]
+    EVAL["lightspeed-eval"]
+    JUDGE["Judge LLM"]
 
-    subgraph ols_stack["OLS Stack (local / CI)"]
-        MCP["Kubernetes MCP Server\nport 8089\n(kiali toolset)"]
-        RAG["Kiali RAG Vector DB\nkiali-byok image"]
-        OLS["OpenShift Lightspeed\nOLS Service  port 8080"]
-        MCP -->|MCP tools API| OLS
-        RAG -->|embeddings + index| OLS
-    end
-
-    subgraph eval["Evaluation (lightspeed-evaluation)"]
-        EVAL["lightspeed-eval\nframework"]
-        JUDGE["Judge LLM\nClaude Opus / Gemini\nvia Vertex AI"]
-        EVAL -->|scores responses| JUDGE
-    end
-
-    MCP -->|Kiali REST API| KIALI
-    EVAL -->|HTTP /query| OLS
-    OLS -->|uses tools| MCP
+    BOOKINFO --- ISTIO
+    ISTIO --- KIALI
+    KIALI -->|REST API| MCP
+    MCP -->|tools| OLS
+    RAG -->|index| OLS
+    OLS -->|tool calls| MCP
+    EVAL -->|query| OLS
+    EVAL -->|score| JUDGE
 ```
 
 | Component | Role |

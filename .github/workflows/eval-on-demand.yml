@@ -1,0 +1,263 @@
+name: Evaluation — On Demand
+
+# ── Trigger ────────────────────────────────────────────────────────────────────
+# Triggered manually from the GitHub UI (Actions → Run workflow).
+# Configuration inputs are typed at run time; credentials come from repo Secrets.
+on:
+  workflow_dispatch:
+    inputs:
+
+      provider:
+        description: "LLM provider — 'all' runs both openai and google sequentially"
+        required: true
+        default: "openai"
+        type: choice
+        options:
+          - openai
+          - google
+          - all
+
+      scenario:
+        description: "Scenario to run ('all' runs every conversation)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - check_mesh_status
+          - fix_bookinfo_fault_injection
+          - fix_bookinfo_routing
+          - troubleshoot_latency_trace
+
+      wait_seconds:
+        description: "Seconds to wait after setup/cleanup for Kiali metrics (default 60 for CI)"
+        required: false
+        default: "60"
+        type: string
+
+      kiali_endpoint:
+        description: "Kiali UI/API URL (leave blank to use the default CRC endpoint)"
+        required: false
+        default: "http://localhost:20001/"
+        type: string
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+permissions:
+  contents: write   # needed to commit and push results back to the repo
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+  evaluate:
+    name: "${{ inputs.scenario }} / ${{ inputs.provider }}"
+    runs-on: ubuntu-latest        # replace with self-hosted if you need more RAM
+
+    # Secrets required (set in repo Settings → Secrets and Variables → Actions):
+    #   OPENAI_KEY        — OpenAI API key (used by openai provider)
+    #   GOOGLE_API_KEY    — Google Gemini API key (optional)
+    #   GCP_CREDENTIALS   — GCP service account JSON content (used by google provider)
+    #   OLS_IMAGE         — (optional) custom OLS container image tag
+
+    env:
+      CLUSTER:        kind
+      PROVIDER:       ${{ inputs.provider }}
+      WAIT_SECONDS:   ${{ inputs.wait_seconds }}
+      KIALI_ENDPOINT: ${{ inputs.kiali_endpoint }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── 2. Python setup ──────────────────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # ── 3. Node.js (MCP server) ──────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ── 4. kind cluster ──────────────────────────────────────────────────────
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: kiali-eval
+          # Enough nodes for Istio + Kiali + Bookinfo workloads
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+              - role: control-plane
+              - role: worker
+
+      # ── 5. Install Istio + Kiali + Bookinfo ───────────────────────────────────
+      # Uses build/kiali.mk — downloads istioctl, installs Istio (demo profile),
+      # Kiali, Jaeger, Prometheus, and the Bookinfo demo with a traffic generator.
+      - name: Setup Istio + Kiali + Bookinfo
+        run: |
+          # kubectl is already configured by kind-action (KUBECONFIG set)
+          make -f build/kiali.mk setup-kiali
+
+      # ── 6. Set Kiali endpoint for MCP ────────────────────────────────────────
+      # kiali.mk expose-kiali already port-forwards Kiali to localhost:20001
+      - name: Set Kiali endpoint
+        run: echo "KIALI_ENDPOINT=http://localhost:20001" >> $GITHUB_ENV
+
+      # ── 7. Credentials ───────────────────────────────────────────────────────
+      - name: Write credentials
+        run: |
+          mkdir -p ~/.openai ~/.gemini ~/.gcp
+
+          # OpenAI key
+          if [ -n "${{ secrets.OPENAI_KEY }}" ]; then
+            echo "${{ secrets.OPENAI_KEY }}" > ~/.openai/openai_api_key.txt
+          fi
+
+          # Google / Gemini key
+          if [ -n "${{ secrets.GOOGLE_API_KEY }}" ]; then
+            echo "${{ secrets.GOOGLE_API_KEY }}" > ~/.gemini/google_api_key.txt
+          fi
+
+          # GCP service account (google provider)
+          if [ -n "${{ secrets.GCP_CREDENTIALS }}" ]; then
+            echo '${{ secrets.GCP_CREDENTIALS }}' > ~/.gcp/gcp_credentials.txt
+          fi
+
+      # ── 8. Install evaluation framework ─────────────────────────────────────
+      - name: Install evaluation framework
+        run: make setup
+
+      # ── 9. Extract Kiali RAG vector DB ───────────────────────────────────────
+      - name: Setup vector DB
+        run: make setup-vector-db
+
+      # ── 10. Start MCP server (background) ─────────────────────────────────────
+      - name: Start Kubernetes MCP server
+        run: |
+          make run-mcp KIALI_ENDPOINT="${KIALI_ENDPOINT}" &
+          echo "MCP_PID=$!" >> $GITHUB_ENV
+          # Wait for MCP to be ready
+          for i in $(seq 1 20); do
+            nc -z localhost 8089 && echo "MCP ready" && break
+            echo "Waiting for MCP... ($i/20)"
+            sleep 2
+          done
+
+      # ── 11. Start OLS service (background container) ───────────────────────────
+      - name: Start OLS service
+        env:
+          OLS_IMAGE: ${{ secrets.OLS_IMAGE || 'quay.io/openshift-lightspeed/lightspeed-service-api:latest' }}
+        run: |
+          # Resolve host IP accessible from inside the Docker container
+          HOST_IP=$(ip route | awk '/default/ {print $3}' | head -1)
+          echo "Host IP for container: $HOST_IP"
+
+          # Patch olsconfig to use the resolved host IP for MCP
+          cp olsconfig/olsconfig-${PROVIDER}.yaml /tmp/olsconfig-ci.yaml
+          sed -i "s|host.containers.internal|${HOST_IP}|g" /tmp/olsconfig-ci.yaml
+
+          # Run OLS (Podman not available on ubuntu-latest — use Docker)
+          openai_mount=""
+          gemini_mount=""
+          gcp_mount=""
+          [ -f ~/.openai/openai_api_key.txt ] && \
+            openai_mount="-v $HOME/.openai/openai_api_key.txt:/app-root/openai_api_key.txt"
+          [ -f ~/.gemini/google_api_key.txt ] && \
+            gemini_mount="-v $HOME/.gemini/google_api_key.txt:/app-root/google_api_key.txt"
+          [ -f ~/.gcp/gcp_credentials.txt ] && \
+            gcp_mount="-v $HOME/.gcp/gcp_credentials.txt:/app-root/gcp_credentials.txt"
+
+          docker run -d --name ols \
+            -v /tmp/olsconfig-ci.yaml:/app-root/config/olsconfig-${PROVIDER}.yaml \
+            -v $(pwd)/vector_db:/app-root/vector_db \
+            $openai_mount $gemini_mount $gcp_mount \
+            -e OLS_CONFIG_FILE=/app-root/config/olsconfig-${PROVIDER}.yaml \
+            -p 8080:8080 \
+            "${OLS_IMAGE:-quay.io/openshift-lightspeed/lightspeed-service-api:latest}"
+
+          # Wait for OLS to be ready
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/healthz && echo "OLS ready" && break
+            echo "Waiting for OLS... ($i/30)"
+            sleep 5
+          done
+
+      # ── 12. Run evaluations ────────────────────────────────────────────────────
+      # If PROVIDER=all, runs both openai and google sequentially.
+      # Future improvement: replace this with a matrix strategy for parallelism.
+      - name: Run evaluations
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.gcp/gcp_credentials.txt
+          API_KEY: ""   # no auth needed in CI (noop-with-token)
+        run: |
+          SCENARIO="${{ inputs.scenario }}"
+          INPUT_PROVIDER="${{ inputs.provider }}"
+
+          # Determine which providers to run
+          if [ "$INPUT_PROVIDER" = "all" ]; then
+            PROVIDERS="openai google"
+          else
+            PROVIDERS="$INPUT_PROVIDER"
+          fi
+
+          for P in $PROVIDERS; do
+            echo "::group::Provider: $P"
+            if [ "$SCENARIO" = "all" ]; then
+              make all PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
+            else
+              make $SCENARIO PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
+            fi
+            echo "::endgroup::"
+          done
+
+      # ── 13. Generate report ───────────────────────────────────────────────────
+      - name: Generate RESULTS.md
+        if: always()
+        run: |
+          INPUT_PROVIDER="${{ inputs.provider }}"
+          if [ "$INPUT_PROVIDER" = "all" ]; then
+            PROVIDERS="openai google"
+          else
+            PROVIDERS="$INPUT_PROVIDER"
+          fi
+          for P in $PROVIDERS; do
+            make generate-results PROVIDER=$P || true
+          done
+          # Regenerate the root RESULTS.md aggregating all providers
+          venv/bin/python scripts/generate_results.py
+
+      # ── 14. Commit and push results ──────────────────────────────────────────
+      - name: Commit and push results
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add RESULTS.md results/ || true
+          git diff --cached --quiet && echo "Nothing to commit" && exit 0
+
+          git commit -m "Update results — ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 15. Upload artifacts (backup) ────────────────────────────────────────
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "results-${{ inputs.provider }}-${{ inputs.scenario }}-${{ github.run_id }}"
+          path: |
+            RESULTS.md
+            results/
+          retention-days: 30
+
+      # ── 16. Cleanup ───────────────────────────────────────────────────────────
+      - name: Stop services
+        if: always()
+        run: |
+          docker stop ols 2>/dev/null || true
+          kill $MCP_PID 2>/dev/null || true

@@ -1,0 +1,406 @@
+name: Evaluation — On Demand
+
+# ── Trigger ────────────────────────────────────────────────────────────────────
+# Triggered manually from the GitHub UI (Actions → Run workflow).
+# Configuration inputs are typed at run time; credentials come from repo Secrets.
+on:
+  workflow_dispatch:
+    inputs:
+
+      provider:
+        description: "LLM provider — 'all' runs both openai and google sequentially"
+        required: true
+        default: "google"
+        type: choice
+        options:
+          - openai
+          - google
+          - all
+
+      scenario:
+        description: "Scenario to run ('all' runs every conversation)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - check_mesh_status
+          - fix_bookinfo_fault_injection
+          - fix_bookinfo_routing
+          - troubleshoot_latency_trace
+
+      wait_seconds:
+        description: "Seconds to wait after setup/cleanup for Kiali metrics (default 60 for CI)"
+        required: false
+        default: "180"
+        type: string
+
+      kiali_endpoint:
+        description: "Kiali UI/API URL (leave blank to use the default CRC endpoint)"
+        required: false
+        default: "http://localhost:20001/kiali"
+        type: string
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+permissions:
+  contents: write       # push result branch
+  pull-requests: write  # create/update the PR
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+  evaluate:
+    name: "${{ inputs.scenario }} / ${{ inputs.provider }}"
+    runs-on: ubuntu-latest        # replace with self-hosted if you need more RAM
+
+    # Secrets required (set in repo Settings → Secrets and Variables → Actions):
+    #   OPENAI_KEY        — OpenAI API key (used by openai provider)
+    #   GOOGLE_API_KEY    — Google Gemini API key (optional)
+    #   GCP_CREDENTIALS   — GCP service account JSON content (used by google provider)
+    #   OLS_IMAGE         — (optional) custom OLS container image tag
+
+    env:
+      CLUSTER:        kind
+      KUBECTL:        kubectl   # use kubectl for kind, not oc
+      PROVIDER:       ${{ inputs.provider }}
+      WAIT_SECONDS:   ${{ inputs.wait_seconds }}
+      KIALI_ENDPOINT: ${{ inputs.kiali_endpoint }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── 2. Python setup ──────────────────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 3. Node.js (MCP server) ──────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ── 4. Install kind + kubectl binaries ───────────────────────────────────
+      - name: Install kind and kubectl
+        uses: helm/kind-action@v1
+        with:
+          install_only: true   # only install the binaries, do NOT create a cluster
+
+      # ── 5. Create kind cluster + Install Istio + Kiali + Bookinfo ─────────────
+      # build/kiali.mk start-kind   → runs build/start_kind.sh (metallb, 2 nodes)
+      # build/kiali.mk setup-kiali  → istioctl + Istio + Kiali + Bookinfo + port-forwards
+      - name: Create kind cluster
+        run: make -f build/kiali.mk start-kind
+
+      - name: Setup Istio + Kiali + Bookinfo
+        run: make -f build/kiali.mk setup-kiali
+
+      # ── 6. Set Kiali endpoint for MCP ────────────────────────────────────────
+      # kiali.mk expose-kiali already port-forwards Kiali to localhost:20001
+      - name: Set Kiali endpoint
+        run: echo "KIALI_ENDPOINT=http://localhost:20001/kiali" >> $GITHUB_ENV
+
+      # ── 6b. Verify Kiali is reachable ─────────────────────────────────────────
+      - name: Verify Kiali
+        run: |
+          BASE="http://localhost:20001/kiali"
+
+          echo "Checking Kiali status API..."
+          for i in $(seq 1 20); do
+            if curl -sf "${BASE}/api/status" > /tmp/kiali-status.json; then
+              echo "✓ Kiali /api/status responded"
+              cat /tmp/kiali-status.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('  version:', d.get('kiali_core_version','?'))" 2>/dev/null || true
+              break
+            fi
+            echo "Waiting for Kiali API... ($i/20)"
+            sleep 5
+          done
+          curl -sf "${BASE}/api/status" || { echo "::error::Kiali /api/status not reachable"; exit 1; }
+
+          echo "Checking Kiali bookinfo productpage service..."
+          curl -sf "${BASE}/api/namespaces/bookinfo/services/productpage?validate=true&rateInterval=60s" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print('  productpage health:', d.get('health',{}).get('requests',{}))" 2>/dev/null || true
+          curl -sf "${BASE}/api/namespaces/bookinfo/services/productpage?validate=true&rateInterval=60s" \
+            || { echo "::error::Kiali bookinfo/productpage endpoint not reachable"; exit 1; }
+
+          echo "✓ Kiali is healthy"
+
+      # ── 7. Credentials ───────────────────────────────────────────────────────
+      # Secret → file mapping:
+      #   OPENAI_KEY         → openai_api_key.txt
+      #   GOOGLE_API_KEY     → google_api_key.txt
+      #   GCP_CREDENTIALS    → gcp_credentials.txt   (GCP service account JSON)
+      - name: Write credentials
+        env:
+          _OPENAI_KEY:      ${{ secrets.OPENAI_KEY }}
+          _GOOGLE_API_KEY:  ${{ secrets.GOOGLE_API_KEY }}
+          _GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          mkdir -p ~/.openai ~/.gemini ~/.gcp
+
+          printf '%s' "$_OPENAI_KEY"      > ~/.openai/openai_api_key.txt
+          printf '%s' "$_GOOGLE_API_KEY"  > ~/.gemini/google_api_key.txt
+          printf '%s' "$_GCP_CREDENTIALS" > ~/.gcp/gcp_credentials.txt
+
+          # Verify required files exist and are non-empty for the selected provider
+          PROVIDER_INPUT="${{ inputs.provider }}"
+          echo "Provider: $PROVIDER_INPUT"
+          if [ "$PROVIDER_INPUT" = "openai" ] || [ "$PROVIDER_INPUT" = "all" ]; then
+            [ -s ~/.openai/openai_api_key.txt ] || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
+            echo "✓ openai_api_key.txt"
+          fi
+          if [ "$PROVIDER_INPUT" = "google" ] || [ "$PROVIDER_INPUT" = "all" ]; then
+            [ -s ~/.gemini/google_api_key.txt  ] || { echo "::error::GOOGLE_API_KEY secret is empty or not set"; exit 1; }
+            [ -s ~/.gcp/gcp_credentials.txt    ] || { echo "::error::GCP_CREDENTIALS secret is empty or not set"; exit 1; }
+            echo "✓ google_api_key.txt"
+            echo "✓ gcp_credentials.txt"
+          fi
+
+      # ── 8. Install evaluation framework ─────────────────────────────────────
+      - name: Install evaluation framework
+        run: |
+          # Verify the Makefile can find a supported Python version (3.11–3.13)
+          for v in python3.13 python3.12 python3.11; do
+            command -v $v && echo "Found: $v" && break
+          done
+
+          # Use the same make setup target as local development
+          make setup
+
+          # Add venv/bin to PATH for all subsequent steps in this job
+          echo "${{ github.workspace }}/venv/bin" >> $GITHUB_PATH
+
+          # Verify deps are installed
+          venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
+
+      # ── 9. Extract Kiali RAG vector DB + embeddings model ────────────────────
+      # get-embeddings-model is a prerequisite of setup-vector-db
+      - name: Setup vector DB
+        run: make setup-vector-db
+
+      # ── 10. Start MCP server (background) ─────────────────────────────────────
+      - name: Start Kubernetes MCP server
+        run: |
+          make run-mcp KIALI_ENDPOINT="http://localhost:20001/kiali" &
+          echo "MCP_PID=$!" >> $GITHUB_ENV
+          # Wait for MCP to be ready — fail if it doesn't start
+          MCP_READY=false
+          for i in $(seq 1 20); do
+            if nc -z localhost 8089; then
+              echo "MCP ready"
+              MCP_READY=true
+              break
+            fi
+            echo "Waiting for MCP... ($i/20)"
+            sleep 2
+          done
+          if [ "$MCP_READY" = "false" ]; then
+            echo "::error::MCP server failed to start on port 8089"
+            exit 1
+          fi
+
+          echo "Verifying MCP stats endpoint..."
+          curl -sf http://localhost:8089/stats \
+            && echo "✓ MCP /stats responded" \
+            || echo "⚠ MCP /stats not available (non-fatal — MCP is listening on port 8089)"
+
+      # ── 11. Start OLS service from source ────────────────────────────────────
+      # Running from source avoids Docker networking issues (host.containers.internal)
+      # and the Podman dependency for vector DB extraction.
+      # The MCP server is on localhost:8089, which OLS can reach directly.
+      - name: Start OLS service
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.gcp/gcp_credentials.txt
+        run: |
+          # Clone lightspeed-service (shallow)
+          git clone --depth 1 https://github.com/openshift/lightspeed-service.git /tmp/ols-src
+
+          # Install uv (Python task runner used by lightspeed-service)
+          pip install uv --quiet
+
+          # Pin torch to CPU-only build before uv resolves deps.
+          # Without this, uv installs CUDA packages (nvidia-*) that are ~2 GB and useless on CI.
+          uv pip install --directory /tmp/ols-src \
+            torch --index-url https://download.pytorch.org/whl/cpu --quiet
+
+          # Patch olsconfig:
+          #  1. replace host.containers.internal with localhost (no container)
+          #  2. replace relative credential paths with absolute paths
+          cp olsconfig/olsconfig-${PROVIDER}.yaml /tmp/olsconfig-ci.yaml
+          WS="${{ github.workspace }}"
+          OLS_DIR="/tmp/ols-src"
+
+          # Copy credentials to OLS root (same directory as runner.py)
+          # so olsconfig relative paths like 'credentials_path: openai_api_key.txt' resolve correctly
+          cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
+          cp ~/.gemini/google_api_key.txt  "$OLS_DIR/google_api_key.txt"
+          cp ~/.gcp/gcp_credentials.txt    "$OLS_DIR/gcp_credentials.txt"
+
+          echo "--- credentials in $OLS_DIR ---"
+          ls -lh "$OLS_DIR/"*.txt 2>/dev/null || echo "(none)"
+
+          # Patch olsconfig: networking + absolute paths for large data dirs
+          sed -i \
+            -e "s|host.containers.internal|localhost|g" \
+            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
+            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
+            /tmp/olsconfig-ci.yaml
+
+          echo "--- patched olsconfig ($PROVIDER) ---"
+          grep -E "credentials_path|url:|default_provider|default_model|embeddings|index_path" /tmp/olsconfig-ci.yaml || true
+          echo "--- credential symlinks in $OLS_DIR ---"
+          ls -la "$OLS_DIR/"*.txt 2>/dev/null || echo "(none)"
+
+          # Run OLS from the workspace so any remaining relative paths resolve correctly
+          cd ${{ github.workspace }}
+          OLS_CONFIG_FILE=/tmp/olsconfig-ci.yaml \
+            uv --directory /tmp/ols-src run python /tmp/ols-src/runner.py &
+          echo "OLS_PID=$!" >> $GITHUB_ENV
+
+          # Wait for OLS to be ready (readiness endpoint)
+          OLS_READY=false
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:8080/readiness; then
+              echo "OLS ready after ${i} attempts"
+              OLS_READY=true
+              break
+            fi
+            echo "Waiting for OLS... ($i/40)"
+            # Print last OLS log lines to help diagnose failures
+            [ "$i" -eq 10 ] || [ "$i" -eq 20 ] || [ "$i" -eq 30 ] && \
+              jobs -l && echo "--- OLS process still running? ---"
+            sleep 5
+          done
+
+          if [ "$OLS_READY" = "false" ]; then
+            echo "::error::OLS failed to start after 200s. Check the config and credentials."
+            exit 1
+          fi
+
+      # ── 12. Run evaluations ────────────────────────────────────────────────────
+      # If PROVIDER=all, runs both openai and google sequentially.
+      # Future improvement: replace this with a matrix strategy for parallelism.
+      - name: Run evaluations
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.gcp/gcp_credentials.txt
+          API_KEY: ""   # no auth needed in CI (noop-with-token)
+        run: |
+          # Guard: recreate venv if it somehow disappeared
+          [ -d venv ] || make setup
+
+          SCENARIO="${{ inputs.scenario }}"
+          INPUT_PROVIDER="${{ inputs.provider }}"
+
+          # Determine which providers to run
+          if [ "$INPUT_PROVIDER" = "all" ]; then
+            PROVIDERS="openai google"
+          else
+            PROVIDERS="$INPUT_PROVIDER"
+          fi
+
+          for P in $PROVIDERS; do
+            echo "::group::Provider: $P"
+            if [ "$SCENARIO" = "all" ]; then
+              make all PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
+            else
+              make $SCENARIO PROVIDER=$P WAIT_SECONDS=$WAIT_SECONDS
+            fi
+            echo "::endgroup::"
+          done
+
+      # ── 13. Generate report ───────────────────────────────────────────────────
+      - name: Generate RESULTS.md
+        if: success()
+        run: |
+          INPUT_PROVIDER="${{ inputs.provider }}"
+          if [ "$INPUT_PROVIDER" = "all" ]; then
+            PROVIDERS="openai google"
+          else
+            PROVIDERS="$INPUT_PROVIDER"
+          fi
+          for P in $PROVIDERS; do
+            make generate-results PROVIDER=$P || true
+          done
+          # Regenerate the root RESULTS.md aggregating all providers
+          python scripts/generate_results.py
+
+      # ── 14. Open a Pull Request with the results ─────────────────────────────
+      - name: Read RESULTS.md for PR body
+        if: success()
+        id: read_results
+        run: |
+          # Truncate to 60 KB — GitHub PR bodies have a ~65 KB limit
+          # Write to a temp file first to avoid heredoc quoting issues
+          CONTENT=$(cat RESULTS.md 2>/dev/null | head -c 60000 || echo '_No results generated._')
+          DELIM="RESULTS_$(date +%s)"
+          printf '%s\n' "RESULTS_BODY<<${DELIM}" >> $GITHUB_OUTPUT
+          printf '%s\n' "${CONTENT}"              >> $GITHUB_OUTPUT
+          printf '%s\n' "${DELIM}"                >> $GITHUB_OUTPUT
+
+      - name: Stage result files
+        if: success()
+        run: |
+          git config user.email 'kiali-dev@googlegroups.com'
+          git config user.name  'kiali-bot'
+          # Force-add all result files (csv/json/graphs are git-ignored locally
+          # but we want them committed in CI result branches)
+          git add -f RESULTS.md \
+            results/*.md \
+            results/*.csv \
+            results/*.json \
+            results/graphs/ \
+            2>/dev/null || true
+          git status --short
+
+      - name: Create Pull Request
+        if: success()
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          committer: "kiali-bot <kiali-dev@googlegroups.com>"
+          author: "kiali-bot <kiali-dev@googlegroups.com>"
+          branch: "results/${{ inputs.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
+          commit-message: "results: ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
+          title: "📊 Results — ${{ inputs.scenario }} / ${{ inputs.provider }}"
+          body: |
+            ## Evaluation run
+
+            | | |
+            |---|---|
+            | **Scenario** | `${{ inputs.scenario }}` |
+            | **Provider** | `${{ inputs.provider }}` |
+            | **Wait seconds** | `${{ inputs.wait_seconds }}` |
+            | **Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            ---
+
+            ${{ steps.read_results.outputs.RESULTS_BODY }}
+          add-paths: |
+            RESULTS.md
+            results/*.md
+            results/*.csv
+            results/*.json
+            results/graphs/
+          delete-branch: false
+          labels: "evaluation,results"
+
+      # ── 15. Upload artifacts (backup) ────────────────────────────────────────
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "results-${{ inputs.provider }}-${{ inputs.scenario }}-${{ github.run_id }}"
+          path: |
+            RESULTS.md
+            results/
+          retention-days: 30
+
+      # ── 16. Cleanup ───────────────────────────────────────────────────────────
+      - name: Stop services
+        if: always()
+        run: |
+          kill $OLS_PID 2>/dev/null || true
+          kill $MCP_PID 2>/dev/null || true

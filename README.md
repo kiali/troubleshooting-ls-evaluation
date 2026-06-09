@@ -13,6 +13,39 @@ Responses are scored with LLM-based metrics (`custom:answer_correctness`,
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart LR
+    BOOKINFO["Bookinfo app"]
+    ISTIO["Istio mesh"]
+    KIALI["Kiali"]
+    MCP["MCP Server :8089"]
+    RAG["Kiali RAG Vector DB"]
+    OLS["OLS Service :8080"]
+    EVAL["lightspeed-eval"]
+    JUDGE["Judge LLM"]
+
+    BOOKINFO --- ISTIO
+    ISTIO --- KIALI
+    KIALI -->|REST API| MCP
+    MCP -->|tools| OLS
+    RAG -->|index| OLS
+    OLS -->|tool calls| MCP
+    EVAL -->|query| OLS
+    EVAL -->|score| JUDGE
+```
+
+| Component | Role |
+|---|---|
+| **Kubernetes MCP Server** | Exposes Kiali observability tools via MCP protocol so OLS can query the mesh |
+| **Kiali RAG Vector DB** | Provides grounded Kiali/Istio documentation as embeddings for OLS responses |
+| **OpenShift Lightspeed (OLS)** | The AI troubleshooting agent under evaluation |
+| **lightspeed-evaluation** | Sends scenario queries to OLS and scores responses with the judge LLM |
+| **Judge LLM** | Independent model (Claude Opus / Gemini) that scores agent correctness |
+
+---
+
 ## LLM Configuration
 
 Two LLM providers are supported. Switch with `PROVIDER=openai` (default) or `PROVIDER=google`.

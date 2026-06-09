@@ -60,7 +60,9 @@ endif
 # ── Include evaluation targets ─────────────────────────────────────────────────
 include scenarios/scenarios.mk
 
-.PHONY: setup setup-vector-db setup-dashboard run-dashboard run-ols run-mcp \
+EMBEDDING_MODEL ?= sentence-transformers/all-mpnet-base-v2
+
+.PHONY: setup setup-vector-db get-embeddings-model setup-dashboard run-dashboard run-ols run-mcp \
         check-venv check-openai-key check-services check-bookinfo check-provider
 
 # ── Provider info ─────────────────────────────────────────────────────────────
@@ -147,7 +149,24 @@ run-dashboard:
 	  API_KEY=$(_KIALI_TOKEN) \
 	  npx vite
 
-setup-vector-db:
+## get-embeddings-model: Download the sentence-transformers embedding model to ./embeddings_model
+get-embeddings-model: check-venv
+	@if [ -d embeddings_model ] && [ -n "$$(ls -A embeddings_model 2>/dev/null)" ]; then \
+	  printf '\033[0;33mSKIP\033[0m embeddings_model/ already exists. Remove it to re-download: rm -rf embeddings_model\n'; \
+	else \
+	  printf 'Installing sentence-transformers (CPU-only torch)...\n'; \
+	  venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu --quiet; \
+	  venv/bin/pip install sentence-transformers --quiet; \
+	  printf 'Downloading embedding model: %s\n' "$(EMBEDDING_MODEL)"; \
+	  venv/bin/python -c "\
+from sentence_transformers import SentenceTransformer; \
+print('Downloading $(EMBEDDING_MODEL) ...'); \
+SentenceTransformer('$(EMBEDDING_MODEL)').save('./embeddings_model'); \
+print('Saved to ./embeddings_model')"; \
+	  printf '\033[0;32m✓\033[0m Embedding model saved to embeddings_model/\n'; \
+	fi
+
+setup-vector-db: get-embeddings-model
 	@if [ -d vector_db/kiali ] && [ -n "$$(ls -A vector_db/kiali 2>/dev/null)" ]; then \
 	  printf '\033[0;33mSKIP\033[0m vector_db/kiali already exists. Remove it to re-extract: rm -rf vector_db/kiali\n'; \
 	else \

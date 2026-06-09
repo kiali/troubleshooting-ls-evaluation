@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+KUBECTL=${KUBECTL:-oc}   # kubectl for kind, oc for OpenShift (set via CLUSTER env)
 set -euo pipefail
 
 FIXTURE_DIR="$(cd "$(dirname "$0")/fixtures" && pwd)"
@@ -6,13 +7,13 @@ NAMESPACE="bookinfo"
 WAIT_SECONDS=${WAIT_SECONDS:-180}  # override with: make all WAIT_SECONDS=60
 
 # Apply the fault injection — DestinationRule + VirtualService with 100% 503 abort
-oc apply -f "$FIXTURE_DIR/manifests.yaml"
+${KUBECTL} apply -f "$FIXTURE_DIR/manifests.yaml"
 
 # Verify the VirtualService was accepted by Istio
 ATTEMPT=0
 until [ "$ATTEMPT" -ge 10 ]; do
   ATTEMPT=$((ATTEMPT + 1))
-  VS=$(oc get virtualservice reviews -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  VS=$(${KUBECTL} get virtualservice reviews -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
   if [ "$VS" -ge 1 ]; then
     echo "VirtualService reviews is active in namespace $NAMESPACE"
     break

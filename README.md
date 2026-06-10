@@ -1,6 +1,8 @@
 # Kiali — LightSpeed Troubleshooting Evaluation
 
+> OSSM evaluation results (OLS): **[RESULTS_OSSM.md](RESULTS_OSSM.md)**  
 > Latest evaluation results: **[RESULTS.md](RESULTS.md)**  
+> OSSM evaluation guide: **[OSSM.md](OSSM.md)**  
 > Full setup & run guide: **[DEVELOPMENT.md](DEVELOPMENT.md)**
 
 End-to-end evaluation of the [OpenShift LightSpeed](https://github.com/openshift/lightspeed-service)
@@ -102,6 +104,7 @@ make generate-results
 | `make run-ols [PROVIDER=…]` | Run the LightSpeed service container (port 8080) |
 | `make run-mcp` | Start the Kubernetes MCP server with Kiali toolset (port 8089) |
 | `make run-dashboard` | Start the evaluation dashboard (port 5173) |
+| `make run-dashboard OLS_ENV=true` | Start the OSSM evaluation dashboard (port 5173) |
 
 ### Evaluation
 
@@ -115,6 +118,17 @@ make generate-results
 | `make generate-results [PROVIDER=…]` | Generate `RESULTS.md` |
 | `make clean-results [PROVIDER=…]` | Wipe `results/<provider>/` |
 
+### OSSM (OpenShift LightSpeed)
+
+See **[OSSM.md](OSSM.md)** for the full guide.
+
+| Target | Description |
+|--------|-------------|
+| `make test` | Run OSSM conversations (OpenAI, `custom:answer_correctness`) |
+| `make check_mesh_status-test` | Run the OSSM mesh status conversation |
+| `make run-dashboard OLS_ENV=true` | Start the OSSM web dashboard |
+| `make generate-ossm-results` | Generate `RESULTS_OSSM.md` from `ossm/results/` |
+
 ### Overridable variables
 
 | Variable | Default | Description |
@@ -123,6 +137,7 @@ make generate-results
 | `KIALI_ENDPOINT` | `https://kiali-istio-system.apps-crc.testing/` | Kiali UI/API URL |
 | `OLS_IMAGE` | `quay.io/openshift-lightspeed/lightspeed-service-api:latest` | OLS image |
 | `WAIT_SECONDS` | `200` | Seconds to wait after setup/cleanup for metrics |
+| `OLS_ENV` | `false` | Set to `true` for OSSM dashboard paths (`ossm/conversations.yaml`, `ossm/results/`) |
 | `KIALI_RAG_DB` | `quay.io/kiali/kiali-byok:latest` | BYOK image for vector DB |
 
 ---
@@ -140,6 +155,10 @@ make generate-results
 │   ├── fix_bookinfo_routing/         # Traffic routing scenario
 │   ├── troubleshoot_latency_trace/   # Latency / trace scenario
 │   └── check_mesh_status/            # (no setup/cleanup needed)
+├── ossm/
+│   ├── ossm_scenarios.mk             # OSSM evaluation targets
+│   ├── conversations.yaml            # OSSM conversations (OLS reporting)
+│   └── results/                      # OSSM evaluation output
 ├── system/
 │   ├── system_openai.yaml            # Judge + API config for openai provider
 │   └── system_google.yaml            # Judge + API config for google provider
@@ -148,7 +167,8 @@ make generate-results
 │   └── olsconfig-google.yaml         # OLS config for google provider
 ├── mcp_config.toml                   # Kubernetes MCP server config
 ├── scripts/
-│   └── generate_results.py           # RESULTS.md generator
+│   ├── generate_results.py           # RESULTS.md generator
+│   └── generate_ossm_results.py      # RESULTS_OSSM.md generator
 ├── vector_db/                        # git-ignored — from make setup-vector-db
 ├── dashboard/                        # git-ignored — from make setup-dashboard
 └── results/                          # evaluation output

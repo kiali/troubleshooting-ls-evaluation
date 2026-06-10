@@ -9,6 +9,7 @@
 #   make run-ols                       # Run the LightSpeed service container
 #   make run-mcp                       # Start the Kiali MCP server
 #   make run-dashboard                 # Start the web dashboard (port 5173)
+#   make run-dashboard OLS_ENV=true    # OSSM dashboard (ossm/conversations.yaml)
 #   make all                           # Run all evaluation scenarios
 #   make fix_bookinfo_fault_injection  # Run one scenario
 #   make check_mesh_status             # Run one scenario
@@ -60,13 +61,35 @@ else
   SYSTEM_CONFIG             = system/system_openai.yaml
 endif
 
+MCP_ENABLED ?= true
+ifeq ($(MCP_ENABLED),false)
+  OLS_PROVIDER_CONFIG_FILE = olsconfig-openai-no-mcp.yaml
+  SYSTEM_CONFIG             = system/system_openai.yaml
+endif
+
+# ── Dashboard paths (relative to dashboard/) ───────────────────────────────────
+# Usage: make run-dashboard              # main eval results
+#        make run-dashboard OLS_ENV=true # OSSM eval results
+OLS_ENV ?= false
+
+ifeq ($(OLS_ENV),true)
+  LS_EVAL_SYSTEM_CFG_PATH = ../$(SYSTEM_CONFIG)
+  LS_EVAL_DATA_PATH       = ../ossm/conversations.yaml
+  LS_EVAL_REPORTS_PATH    = ../ossm/results
+else
+  LS_EVAL_SYSTEM_CFG_PATH = ../$(SYSTEM_CONFIG)
+  LS_EVAL_DATA_PATH       = ../scenarios/conversations.yaml
+  LS_EVAL_REPORTS_PATH    = ../dashboard_results
+endif
+
 # ── Include evaluation targets ─────────────────────────────────────────────────
 include scenarios/scenarios.mk
+include ossm/ossm_scenarios.mk
 
 EMBEDDING_MODEL ?= sentence-transformers/all-mpnet-base-v2
 
 .PHONY: setup setup-vector-db get-embeddings-model setup-dashboard run-dashboard run-ols run-mcp \
-        check-venv check-openai-key check-services check-bookinfo check-provider
+        check-venv check-openai-key check-services check-services-ols check-bookinfo check-provider
 
 # ── Provider info + validation ────────────────────────────────────────────────
 # Validates PROVIDER at runtime (not parse-time) so "make setup PROVIDER=all" works.
@@ -100,9 +123,11 @@ check-openai-key:
 	  export OPENAI_API_KEY=$$(cat "$(OPENAI_KEY_FILE)"); \
 	fi
 
-check-services:
+check-services-ols:
 	@nc -z localhost 8080 2>/dev/null || \
 	  (printf '\033[0;31mERROR:\033[0m Port 8080 not open. Run: make run-ols\n'; exit 1)
+
+check-services: check-services-ols
 	@nc -z localhost 8089 2>/dev/null || \
 	  (printf '\033[0;31mERROR:\033[0m Port 8089 not open. Run: make run-mcp\n'; exit 1)
 
@@ -148,20 +173,29 @@ setup-dashboard:
 	@printf '\033[0;32m✓\033[0m Dashboard ready. Run: make run-dashboard\n'
 
 # ── run-dashboard: start the Vite dev server with project paths ────────────────
-run-dashboard:
+run-dashboard: check-venv
 	@[ -d dashboard/node_modules ] || \
 	  (printf '\033[0;31mERROR:\033[0m Dashboard not set up. Run: make setup-dashboard\n'; exit 1)
-	@printf 'Collecting results from provider subfolders into dashboard_results/...\n'; \
-	mkdir -p dashboard_results/graphs; \
-	for dir in results/*/; do \
-	  [ -d "$$dir" ] || continue; \
-	  find "$$dir" -maxdepth 1 \( -name '*.json' -o -name '*.csv' \) -exec cp -v {} dashboard_results/ \; ; \
-	  [ -d "$${dir}graphs" ] && find "$${dir}graphs" -maxdepth 1 -type f -exec cp -v {} dashboard_results/graphs/ \; || true; \
-	done
+	@if [ "$(OLS_ENV)" = "true" ]; then \
+	  printf 'Dashboard mode: \033[1mOSSM\033[0m (OLS_ENV=true)\n'; \
+	  printf '  system:  $(LS_EVAL_SYSTEM_CFG_PATH)\n'; \
+	  printf '  data:    $(LS_EVAL_DATA_PATH)\n'; \
+	  printf '  reports: $(LS_EVAL_REPORTS_PATH)\n'; \
+	else \
+	  printf 'Cleaning dashboard_results/ and collecting from results/*/\n'; \
+	  rm -rf dashboard_results; \
+	  mkdir -p dashboard_results/graphs; \
+	  for dir in results/*/; do \
+	    [ -d "$$dir" ] || continue; \
+	    find "$$dir" -maxdepth 1 \( -name '*.json' -o -name '*.csv' \) -exec cp -v {} dashboard_results/ \; ; \
+	    [ -d "$${dir}graphs" ] && find "$${dir}graphs" -maxdepth 1 -type f -exec cp -v {} dashboard_results/graphs/ \; || true; \
+	  done; \
+	fi
 	cd dashboard && \
-	  LS_EVAL_SYSTEM_CFG_PATH=../system.yaml \
-	  LS_EVAL_DATA_PATH=../scenarios/conversations.yaml \
-	  LS_EVAL_REPORTS_PATH=../dashboard_results \
+	  PATH=$$(pwd)/../venv/bin:$$PATH \
+	  LS_EVAL_SYSTEM_CFG_PATH=$(LS_EVAL_SYSTEM_CFG_PATH) \
+	  LS_EVAL_DATA_PATH=$(LS_EVAL_DATA_PATH) \
+	  LS_EVAL_REPORTS_PATH=$(LS_EVAL_REPORTS_PATH) \
 	  LS_EVAL_DASHBOARD_RUN_ENABLED=true \
 	  OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
 	  GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \

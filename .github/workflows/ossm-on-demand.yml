@@ -1,0 +1,349 @@
+name: OSSM Evaluation — On Demand
+
+# Triggered manually from the GitHub UI (Actions → Run workflow).
+# Runs OSSM evals in parallel (with MCP + without MCP), then opens a PR with
+# RESULTS_OSSM.md and ossm/results/{mcp,no-mcp}/ committed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      wait_seconds:
+        description: "Seconds to wait after setup/cleanup for Kiali metrics"
+        required: false
+        default: "180"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PROVIDER:     openai
+  WAIT_SECONDS: ${{ inputs.wait_seconds }}
+
+jobs:
+
+  # ── OSSM with Kiali MCP toolset ─────────────────────────────────────────────
+  ossm-with-mcp:
+    name: OSSM / openai / with MCP
+    runs-on: ubuntu-latest
+    env:
+      CLUSTER:          kind
+      KUBECTL:          kubectl
+      KIALI_ENDPOINT:   http://localhost:20001/kiali
+      RESULTS_OSSM_DIR: ossm/results/mcp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install kind and kubectl
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Create kind cluster
+        run: make -f build/kiali.mk start-kind
+
+      - name: Setup Istio + Kiali + Bookinfo
+        run: make -f build/kiali.mk setup-kiali
+
+      - name: Set Kiali endpoint
+        run: echo "KIALI_ENDPOINT=http://localhost:20001/kiali" >> $GITHUB_ENV
+
+      - name: Verify Kiali
+        run: |
+          BASE="http://localhost:20001/kiali"
+          for i in $(seq 1 20); do
+            curl -sf "${BASE}/api/status" > /dev/null && break
+            echo "Waiting for Kiali... ($i/20)"
+            sleep 5
+          done
+          curl -sf "${BASE}/api/status" \
+            || { echo "::error::Kiali /api/status not reachable"; exit 1; }
+          echo "✓ Kiali is healthy"
+
+      - name: Write credentials
+        env:
+          _OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+        run: |
+          mkdir -p ~/.openai
+          printf '%s' "$_OPENAI_KEY" > ~/.openai/openai_api_key.txt
+          [ -s ~/.openai/openai_api_key.txt ] \
+            || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
+
+      - name: Install evaluation framework
+        run: |
+          make setup
+          echo "${{ github.workspace }}/venv/bin" >> $GITHUB_PATH
+          venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
+
+      - name: Setup vector DB
+        run: make setup-vector-db
+
+      - name: Start Kubernetes MCP server
+        run: |
+          make run-mcp KIALI_ENDPOINT="http://localhost:20001/kiali" &
+          echo "MCP_PID=$!" >> $GITHUB_ENV
+          for i in $(seq 1 20); do
+            nc -z localhost 8089 && echo "MCP ready" && exit 0
+            echo "Waiting for MCP... ($i/20)"
+            sleep 2
+          done
+          echo "::error::MCP server failed to start on port 8089"
+          exit 1
+
+      - name: Start OLS service
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          OLS_CONFIG_SRC: olsconfig-openai.yaml
+        run: |
+          git clone --depth 1 https://github.com/openshift/lightspeed-service.git /tmp/ols-src
+          pip install uv --quiet
+          uv pip install --directory /tmp/ols-src \
+            torch --index-url https://download.pytorch.org/whl/cpu --quiet
+
+          cp olsconfig/${OLS_CONFIG_SRC} /tmp/olsconfig-ci.yaml
+          WS="${{ github.workspace }}"
+          OLS_DIR="/tmp/ols-src"
+
+          cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
+          sed -i \
+            -e "s|host.containers.internal|localhost|g" \
+            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
+            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
+            /tmp/olsconfig-ci.yaml
+
+          cd "$WS"
+          OLS_CONFIG_FILE=/tmp/olsconfig-ci.yaml \
+            uv --directory /tmp/ols-src run python /tmp/ols-src/runner.py &
+          echo "OLS_PID=$!" >> $GITHUB_ENV
+
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8080/readiness && echo "OLS ready" && exit 0
+            echo "Waiting for OLS... ($i/40)"
+            sleep 5
+          done
+          echo "::error::OLS failed to start"
+          exit 1
+
+      - name: Run OSSM tests (with MCP)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          API_KEY: ""
+        run: make test PROVIDER=openai WAIT_SECONDS=${WAIT_SECONDS} RESULTS_OSSM_DIR=${RESULTS_OSSM_DIR}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ossm-results-mcp
+          path: ossm/results/mcp/
+          retention-days: 7
+
+      - name: Stop services
+        if: always()
+        run: |
+          kill $OLS_PID 2>/dev/null || true
+          kill $MCP_PID 2>/dev/null || true
+
+  # ── OSSM without MCP (OLS + RAG only) ───────────────────────────────────────
+  ossm-without-mcp:
+    name: OSSM / openai / without MCP
+    runs-on: ubuntu-latest
+    env:
+      RESULTS_OSSM_DIR: ossm/results/no-mcp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Write credentials
+        env:
+          _OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+        run: |
+          mkdir -p ~/.openai
+          printf '%s' "$_OPENAI_KEY" > ~/.openai/openai_api_key.txt
+          [ -s ~/.openai/openai_api_key.txt ] \
+            || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
+
+      - name: Install evaluation framework
+        run: |
+          make setup
+          echo "${{ github.workspace }}/venv/bin" >> $GITHUB_PATH
+          venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
+
+      - name: Setup vector DB
+        run: make setup-vector-db
+
+      - name: Start OLS service (no MCP)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          OLS_CONFIG_SRC: olsconfig-openai-no-mcp.yaml
+        run: |
+          git clone --depth 1 https://github.com/openshift/lightspeed-service.git /tmp/ols-src
+          pip install uv --quiet
+          uv pip install --directory /tmp/ols-src \
+            torch --index-url https://download.pytorch.org/whl/cpu --quiet
+
+          cp olsconfig/${OLS_CONFIG_SRC} /tmp/olsconfig-ci.yaml
+          WS="${{ github.workspace }}"
+          OLS_DIR="/tmp/ols-src"
+
+          cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
+          sed -i \
+            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
+            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
+            /tmp/olsconfig-ci.yaml
+
+          cd "$WS"
+          OLS_CONFIG_FILE=/tmp/olsconfig-ci.yaml \
+            uv --directory /tmp/ols-src run python /tmp/ols-src/runner.py &
+          echo "OLS_PID=$!" >> $GITHUB_ENV
+
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8080/readiness && echo "OLS ready" && exit 0
+            echo "Waiting for OLS... ($i/40)"
+            sleep 5
+          done
+          echo "::error::OLS failed to start"
+          exit 1
+
+      - name: Run OSSM tests (without MCP)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+        run: |
+          make test-without-mcp PROVIDER=openai WAIT_SECONDS=${WAIT_SECONDS} \
+            RESULTS_OSSM_DIR=${RESULTS_OSSM_DIR} MCP_ENABLED=false
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ossm-results-no-mcp
+          path: ossm/results/no-mcp/
+          retention-days: 7
+
+      - name: Stop OLS
+        if: always()
+        run: kill $OLS_PID 2>/dev/null || true
+
+  # ── Publish: merge results, commit, and open PR ─────────────────────────────
+  publish-results:
+    name: OSSM / publish results PR
+    needs: [ossm-with-mcp, ossm-without-mcp]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ossm-results-*
+          merge-multiple: false
+          path: /tmp/ossm-artifacts
+
+      - name: Merge results
+        run: |
+          mkdir -p ossm/results/mcp ossm/results/no-mcp
+          cp -r /tmp/ossm-artifacts/ossm-results-mcp/*    ossm/results/mcp/    2>/dev/null || true
+          cp -r /tmp/ossm-artifacts/ossm-results-no-mcp/* ossm/results/no-mcp/ 2>/dev/null || true
+          echo "--- merged tree ---"
+          find ossm/results/mcp ossm/results/no-mcp -type f 2>/dev/null | sort
+
+      - name: Generate RESULTS_OSSM.md
+        run: |
+          pip install pyyaml --quiet
+          python scripts/generate_ossm_results.py \
+            --results-dir ossm/results \
+            --output RESULTS_OSSM.md
+
+      - name: Commit and push results
+        env:
+          MCP_RESULT: ${{ needs.ossm-with-mcp.result }}
+          NOMCP_RESULT: ${{ needs.ossm-without-mcp.result }}
+        run: |
+          git config user.email 'kiali-dev@googlegroups.com'
+          git config user.name  'kiali-bot'
+
+          BRANCH="results/ossm/${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+
+          # Force-add bypasses .gitignore so CSV/JSON/graphs/RESULTS_OSSM.md all land
+          git add -f RESULTS_OSSM.md ossm/results/
+          echo "--- staged files ($(git diff --cached --name-only | wc -l) total) ---"
+          git diff --cached --name-only | sort
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — skipping push"
+            echo "BRANCH_PUSHED=false" >> $GITHUB_ENV
+          else
+            git commit -m "results: OSSM openai with-MCP=${MCP_RESULT} without-MCP=${NOMCP_RESULT} (run ${{ github.run_id }})"
+            git push -u origin "$BRANCH"
+            echo "BRANCH_PUSHED=true" >> $GITHUB_ENV
+          fi
+          echo "RESULT_BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        if: env.BRANCH_PUSHED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MCP_RESULT: ${{ needs.ossm-with-mcp.result }}
+          NOMCP_RESULT: ${{ needs.ossm-without-mcp.result }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          printf '%s\n' \
+            "## OSSM evaluation run" \
+            "" \
+            "| | |" \
+            "|---|---|" \
+            "| **Provider** | \`openai\` |" \
+            "| **With MCP** | \`${MCP_RESULT}\` |" \
+            "| **Without MCP** | \`${NOMCP_RESULT}\` |" \
+            "| **Wait seconds** | \`${{ inputs.wait_seconds }}\` |" \
+            "| **Run** | [${{ github.run_id }}](${RUN_URL}) |" \
+            "" \
+            "---" \
+            "" \
+            > /tmp/pr-body.md
+
+          grep -v '^!\[' RESULTS_OSSM.md 2>/dev/null | head -c 60000 >> /tmp/pr-body.md \
+            || echo '_No results generated._' >> /tmp/pr-body.md
+
+          gh pr create \
+            --head "$RESULT_BRANCH" \
+            --base "${{ github.ref_name }}" \
+            --title "📊 OSSM Results — openai (run ${{ github.run_id }})" \
+            --body-file /tmp/pr-body.md \
+            --label "evaluation,results,ossm"
+
+      - name: Summarize job outcomes
+        run: |
+          MCP="${{ needs.ossm-with-mcp.result }}"
+          NOMCP="${{ needs.ossm-without-mcp.result }}"
+          echo "## OSSM on-demand evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Variant | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| with MCP | ${MCP} |" >> $GITHUB_STEP_SUMMARY
+          echo "| without MCP | ${NOMCP} |" >> $GITHUB_STEP_SUMMARY
+          if [ "$MCP" != "success" ] || [ "$NOMCP" != "success" ]; then
+            echo "::error::One or more OSSM jobs failed"
+            exit 1
+          fi

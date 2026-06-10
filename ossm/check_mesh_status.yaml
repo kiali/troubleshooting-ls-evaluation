@@ -1,0 +1,35 @@
+# Evaluation data for fix_bookinfo_fault_injection
+#
+# tool_calls: null  →  populated at runtime by the API, never pre-fill
+#
+# expected_tool_calls format:
+#   Simple (one tool):        - - tool_name: foo
+#   With alternatives:        - - - tool_name: foo   (alt1, seq1, tool1)
+#                               - - tool_name: bar   (alt1, seq2, tool1)
+#                             - - - tool_name: baz   (alt2, seq1, tool1)
+#
+# system.yaml: full_match: false (extra tool calls allowed), ordered: false
+#
+# Script paths are resolved relative to this file's location.
+
+- conversation_group_id: check_mesh_status
+  tag: check_mesh_Status
+  description: "Check the status of the mesh and identify any issues."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Check the status of the mesh and identify any issues.
+      expected_response: >
+        The agent should report the current health status of the Istio service mesh
+        by querying Kiali. It should identify the overall mesh health and list any
+        namespaces or services that are degraded, with a warning or error status,
+        or confirm that all components are healthy.
+      tool_calls: null
+      expected_keywords:
+        - - bookinfo
+          - mesh
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+        - custom:tool_eval

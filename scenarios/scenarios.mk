@@ -10,7 +10,8 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 .PHONY: all clean-results generate-results \
-        fix_bookinfo_fault_injection fix_bookinfo_routing check_mesh_status
+        fix_bookinfo_fault_injection fix_bookinfo_routing check_mesh_status \
+        troubleshoot_latency_trace
 
 CONVERSATIONS = scenarios/conversations.yaml
 WAIT_SECONDS ?= 200   # seconds to wait after setup/cleanup for metrics to propagate
@@ -39,7 +40,8 @@ generate-results: check-venv
 
 # ── all: run every conversation in conversations.yaml ─────────────────────────
 all: check-venv check-openai-key check-services check-bookinfo \
-	fix_bookinfo_routing check_mesh_status fix_bookinfo_fault_injection
+	fix_bookinfo_routing check_mesh_status fix_bookinfo_fault_injection \
+	troubleshoot_latency_trace
 
 # ── Individual conversation targets ───────────────────────────────────────────
 
@@ -54,3 +56,7 @@ fix_bookinfo_routing: check-venv check-openai-key check-services check-bookinfo
 check_mesh_status: check-venv check-openai-key check-services check-bookinfo
 	$(EVAL_BASE) \
 	  --tag healthy_env
+
+troubleshoot_latency_trace: check-venv check-openai-key check-services check-bookinfo
+	$(EVAL_BASE) \
+	  --tag troubleshoot_latency_trace

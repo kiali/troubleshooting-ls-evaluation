@@ -356,14 +356,13 @@
   turns:
     - turn_id: investigate
       query: >
-        The Bookinfo product page is loading very slowly — requests are taking
-        several seconds. All pods are running fine and all resources are in the
-        'bookinfo' namespace. Can you investigate what is causing the latency
-        and which service is responsible?
+        The Bookinfo product page is loading very slowly — requests to the page
+        are taking several seconds. All pods are running fine. Can you investigate
+        what is causing the latency and tell me which service is responsible?
       expected_response: >
         The agent should investigate and identify that the ratings service is
         causing significant latency. It should find evidence such as high response
-        times in the traffic graph, traces showing slow spans on the ratings
+        times visible in the traffic graph, traces showing slow spans on the ratings
         service, or metrics indicating elevated latency for ratings.
       tool_calls: null
       expected_tool_calls:
@@ -371,6 +370,11 @@
           - - tool_name: kiali_get_mesh_traffic_graph
               arguments:
                 namespaces: bookinfo
+        - # Alternative 1b: traffic graph with graphType param
+          - - tool_name: kiali_get_mesh_traffic_graph
+              arguments:
+                namespaces: bookinfo
+                graphType: versionedApp
         - # Alternative 2: traces to find slow spans
           - - tool_name: kiali_list_traces
               arguments:
@@ -394,8 +398,9 @@
 
     - turn_id: diagnose
       query: >
-        Can you check the distributed traces for the bookinfo namespace
-        to pinpoint exactly where the delay is introduced?
+        Based on your findings, can you check the distributed traces for the
+        bookinfo namespace — especially for the ratings service — to pinpoint
+        exactly where the 3-second delay is introduced?
       expected_response: >
         The agent should query distributed traces for the bookinfo namespace
         and identify that the ratings service has traces with spans showing
@@ -404,10 +409,11 @@
         fixedDelay of 3 seconds on 100% of requests.
       tool_calls: null
       expected_tool_calls:
-        - # Alternative 1: list traces for ratings or productpage
+        - # Alternative 1: list traces scoped to ratings
           - - tool_name: kiali_list_traces
               arguments:
                 namespace: bookinfo
+                serviceName: ratings
         - # Alternative 2: read ratings VirtualService config
           - - tool_name: kiali_manage_istio_config_read
               arguments:

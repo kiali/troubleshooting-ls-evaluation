@@ -1,7 +1,7 @@
-# ❌ fix_bookinfo_fault_injection
+# ✅ fix_bookinfo_fault_injection
 
-**OLS model:** `google_vertex/gemini-2.5-pro` &nbsp;|&nbsp; **Judge:** `vertex/gemini-2.5-pro`  
-**Run:** 2026-06-10 13:34:20 &nbsp;|&nbsp; **Evaluations:** 11 &nbsp;|&nbsp; ✅ 8 PASS &nbsp; ❌ 1 FAIL &nbsp; ⚠️ 2 ERROR &nbsp; (73%)
+**OLS model:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`  
+**Run:** 2026-06-10 13:30:49 &nbsp;|&nbsp; **Evaluations:** 11 &nbsp;|&nbsp; ✅ 11 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
 
 > Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260610_133420_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260610_133049_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260610_133420_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260610_133049_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260610_133420_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260610_133049_status_breakdown.png)
 
 </details>
 
@@ -28,13 +28,13 @@
 
 | Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |
 |---|---|---|---|---|---|
-| `custom:answer_correctness` | 2 | 0 | 1 | 🟡 67% | 1.00 |
-| `custom:keywords_eval` | 2 | 0 | 1 | 🟡 67% | 1.00 |
+| `custom:answer_correctness` | 3 | 0 | 0 | ✅ 100% | 0.91 |
+| `custom:keywords_eval` | 3 | 0 | 0 | ✅ 100% | 1.00 |
 | `custom:tool_eval` | 1 | 0 | 0 | ✅ 100% | 1.00 |
 | `deepeval:conversation_completeness` | 1 | 0 | 0 | ✅ 100% | 1.00 |
-| `deepeval:conversation_relevancy` | 0 | 1 | 0 | ❌ 0% | 0.67 |
+| `deepeval:conversation_relevancy` | 1 | 0 | 0 | ✅ 100% | 1.00 |
 | `deepeval:knowledge_retention` | 1 | 0 | 0 | ✅ 100% | 1.00 |
-| `geval:troubleshooting_continuity` | 1 | 0 | 0 | ✅ 100% | 1.00 |
+| `geval:troubleshooting_continuity` | 1 | 0 | 0 | ✅ 100% | 0.97 |
 
 ## Turns
 
@@ -46,18 +46,9 @@
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ⚠️ ERROR | — |
-| `custom:keywords_eval` | ⚠️ ERROR | — |
+| `custom:answer_correctness` | ✅ PASS | `████████████░░░░` 0.78 |
+| `custom:keywords_eval` | ✅ PASS | `████████████████` 1.00 |
 | `custom:tool_eval` | ✅ PASS | `████████████████` 1.00 |
-
-<details>
-<summary>Judge reasons (failures)</summary>
-
-**`custom:answer_correctness`:** Metric 'custom:answer_correctness' requires 'response' and 'expected_response' fields: required field 'response' is missing or empty
-
-**`custom:keywords_eval`:** Metric 'custom:keywords_eval' requires 'response' and 'expected_keywords' fields: required field 'response' is missing or empty
-
-</details>
 
 <details>
 <summary>Expected signals</summary>
@@ -93,10 +84,33 @@ Option 2: `bookinfo` + `ratings` + `503`
 <details>
 <summary>Actual tool calls</summary>
 
-- `kiali_manage_istio_config_read`(namespace=bookinfo, action=list, kind=VirtualService)
-- `kiali_manage_istio_config_read`(action=list, group=networking.istio.io, namespace=bookinfo, kind=VirtualService)
-- `kiali_manage_istio_config_read`(kind=VirtualService, namespace=bookinfo, version=v1, group=networking.istio.io, …)
-- `kiali_manage_istio_config_read`(kind=VirtualService, namespace=bookinfo, object=ratings, group=networking.istio.io, …)
+- `kiali_manage_istio_config_read`(action=list, namespace=bookinfo, serviceName=ratings)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, namespace=bookinfo, …)
+
+</details>
+
+<details>
+<summary>Agent response</summary>
+
+```
+Diagnosis
+- Evidence
+  - Istio VirtualService bookinfo/ratings has a fault injection configured to abort every request with HTTP 503:
+    - Resource: networking.istio.io/v1 VirtualService ratings (namespace: bookinfo)
+    - Spec excerpt:
+      - spec.hosts: ["ratings.bookinfo.svc.cluster.local"]
+      - spec.http[0].fault.abort.httpStatus: 503
+      - spec.http[0].fault.abort.percentage.value: 100
+      - spec.http[0].route -> destination host: ratings.bookinfo.svc.cluster.local, subset: v1, weight: 100
+  - DestinationRule bookinfo/ratings exists and defines subset v1 correctly, so subsets are fine.
+
+- Root cause
+  - A leftover fault injection rule in the ratings VirtualService is aborting 100% of calls with 503. This will surface as “Ratings service currently unavailable” whenever the application path invokes ratings. Because only some user flows call ratings (e.g., reviews v2 path), only “some users” observe the error.
+
+Fix / Mitigation
+- Remove the fault injection from the ratings V…
+```
 
 </details>
 
@@ -139,8 +153,8 @@ Option 2: `503` + `ratings` + `VirtualService`
 <details>
 <summary>Actual tool calls</summary>
 
-- `kiali_manage_istio_config_read`(kind=VirtualService, namespace=bookinfo, object=ratings, version=v1, …)
-- `kiali_manage_istio_config_read`(kind=DestinationRule, namespace=bookinfo, object=ratings, group=networking.istio.io, …)
+- `kiali_manage_istio_config_read`(action=list, namespace=bookinfo)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
 
 </details>
 
@@ -148,41 +162,17 @@ Option 2: `503` + `ratings` + `VirtualService`
 <summary>Agent response</summary>
 
 ```
-The errors on the Bookinfo product page are caused by a fault injection rule in the `ratings` VirtualService. This rule is configured to abort 100% of requests with an HTTP 503 error, which is why users are seeing errors.
-
-**Evidence:**
-
-The `ratings` VirtualService in the `bookinfo` namespace has the following definition:
-
-```yaml
-apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: ratings
-  namespace: bookinfo
-spec:
-  hosts:
-  - ratings.bookinfo.svc.cluster.local
-  http:
-  - fault:
-      abort:
-        httpStatus: 503
-        percentage:
-          value: 100
-    route:
-    - destination:
-        host: ratings.bookinfo.svc.cluster.local
-        subset: v1
-      weight: 100
-```
-
-**Root Cause:**
-
-The `fault` section in the VirtualService is intentionally configured to inject failures for all incoming traffic to the `ratings` service. This is causing the service to be unavailable and resulting in the errors seen by users.
-
-**Recommendation:**
-
-To fix this issue, you…
+Root cause
+- The Istio VirtualService for ratings in namespace bookinfo is configured to abort 100% of requests with HTTP 503 via a fault injection.
+- Evidence:
+  - Resource: networking.istio.io/v1 VirtualService ratings (namespace: bookinfo)
+  - spec.hosts: ["ratings.bookinfo.svc.cluster.local"]
+  - spec.http[0].fault.abort.httpStatus: 503
+  - spec.http[0].fault.abort.percentage.value: 100
+  - spec.http[0].route[0].destination: host: ratings.bookinfo.svc.cluster.local, subset: v1, weight: 100
+  - metadata.creationTimestamp: 2026-06-10T13:23:39Z
+- Impact:
+  - All calls routed through this VirtualService to ratings are deliberately aborted with 503, which matches the “some users see errors” symptom when their flow invokes ratings.
 ```
 
 </details>
@@ -202,7 +192,7 @@ The root cause is a fault injection rule in the ratings VirtualService that abor
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `████████████████` 1.00 |
+| `custom:answer_correctness` | ✅ PASS | `███████████████░` 0.95 |
 | `custom:keywords_eval` | ✅ PASS | `████████████████` 1.00 |
 
 <details>
@@ -226,21 +216,10 @@ Option 3: `fixed` + `ratings`
 <details>
 <summary>Actual tool calls</summary>
 
-- `kiali_manage_istio_config`(group=networking.istio.io, namespace=bookinfo, object=ratings, data=apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: ratings
-  namespace: bookinfo
-spec:
-  hosts:
-  - ratings.bookinfo.svc.cluster.local
-  http:
-  - route:
-    - destination:
-        host: ratings.bookinfo.svc.cluster.local
-        subset: v1
-      weight: 100
-, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config`(action=patch, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_get_metrics`(namespace=bookinfo, resourceName=ratings, resourceType=service, requestProtocol=http, …)
 
 </details>
 
@@ -248,7 +227,23 @@ spec:
 <summary>Agent response</summary>
 
 ```
-I have removed the fault injection rule from the `ratings` VirtualService. The issue should now be resolved.
+Fix applied
+
+- What I changed
+  - Removed the fault injection from the Istio VirtualService ratings in namespace bookinfo so it no longer aborts requests with HTTP 503.
+  - Patched object: networking.istio.io/v1 VirtualService ratings (namespace: bookinfo)
+  - New spec excerpt:
+    - spec.hosts: ["ratings.bookinfo.svc.cluster.local"]
+    - spec.http[0].route[0].destination: host: ratings.bookinfo.svc.cluster.local, subset: v1, weight: 100
+    - No spec.http.fault present
+
+- Evidence of change
+  - VirtualService ratings (generation: 2, resourceVersion: 3555) now has http route only; fault block is absent.
+  - Kiali metrics for service bookinfo/ratings (inbound, destination reporter, last 5m) show traffic and latency but no error series, indicating 5xx faults have ceased.
+
+Next steps to validate
+- Refresh the Bookinfo product page; ratings should render normally for flows that call ratings (e.g., via reviews v2).
+- If you still see issues, I can check reviews/productpage logs and routing…
 ```
 
 </details>
@@ -264,19 +259,12 @@ The agent should remove the fault injection rule from the ratings VirtualService
 
 | Metric | Result | Score |
 |---|---|---|
-| `geval:troubleshooting_continuity` | ✅ PASS | `████████████████` 1.00 |
-| `deepeval:conversation_relevancy` | ❌ FAIL | `███████████░░░░░` 0.67 |
+| `geval:troubleshooting_continuity` | ✅ PASS | `███████████████░` 0.97 |
+| `deepeval:conversation_relevancy` | ✅ PASS | `████████████████` 1.00 |
 | `deepeval:knowledge_retention` | ✅ PASS | `████████████████` 1.00 |
 | `deepeval:conversation_completeness` | ✅ PASS | `████████████████` 1.00 |
 
-<details>
-<summary>Judge reasons (failures)</summary>
-
-**`deepeval:conversation_relevancy`:** The score is 0.6666666666666666 because in message 1, the assistant provided an empty response to the user's detailed technical question, failing to provide any information.
-
-</details>
-
 ---
 
-*Tokens — Judge: 23,887 | API: 25,348 | Total: 49,235*
-*Latency — mean: 21.6s | p95: 40.5s*
+*Tokens — Judge: 20,494 | API: 37,665 | Total: 58,159*
+*Latency — mean: 16.8s | p95: 21.9s*

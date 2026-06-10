@@ -404,6 +404,14 @@
               arguments:
                 namespace: bookinfo
                 action: list
+        - # Alternative 6: traces scoped to ratings service directly
+          - - tool_name: kiali_list_traces
+              arguments:
+                namespace: bookinfo
+                serviceName: ratings
+          - - tool_name: kiali_get_trace_details
+              arguments:
+                traceID: ".*"
       expected_keywords:
         - - ratings
           - latency
@@ -443,6 +451,14 @@
                 object: ratings
                 group: networking.istio.io
                 version: v1
+        - # Alternative 6: traces scoped to ratings service directly
+          - - tool_name: kiali_list_traces
+              arguments:
+                namespace: bookinfo
+                serviceName: ratings
+          - - tool_name: kiali_get_trace_details
+              arguments:
+                traceID: ".*"
       expected_keywords:
         - - ratings
           - delay

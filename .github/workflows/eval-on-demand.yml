@@ -321,34 +321,23 @@ jobs:
           fi
           echo "::endgroup::"
 
-      # ── 13. Generate report ───────────────────────────────────────────────────
-      - name: Generate RESULTS.md
+      # ── 13. Generate per-provider detail pages (written into results/<provider>/) ─
+      - name: Generate detail pages
         if: success()
-        run: |
-          # Matrix sets PROVIDER — generate report for this provider only
-          make generate-results PROVIDER=${PROVIDER} || true
-          python scripts/generate_results.py
-
-      # ── 14. Open a Pull Request with the results ─────────────────────────────
-      - name: Read RESULTS.md for PR body
-        if: success()
-        id: read_results
-        run: |
-          # Truncate to 60 KB — GitHub PR bodies have a ~65 KB limit
-          # Write to a temp file first to avoid heredoc quoting issues
-          CONTENT=$(cat RESULTS.md 2>/dev/null | head -c 60000 || echo '_No results generated._')
-          DELIM="RESULTS_$(date +%s)"
-          printf '%s\n' "RESULTS_BODY<<${DELIM}" >> $GITHUB_OUTPUT
-          printf '%s\n' "${CONTENT}"              >> $GITHUB_OUTPUT
-          printf '%s\n' "${DELIM}"                >> $GITHUB_OUTPUT
+        run: make generate-results PROVIDER=${PROVIDER} || true
 
       # ── 14. Upload results as artifact (picked up by publish-results job) ───────
+      # Upload only this provider's subfolder.  actions/upload-artifact strips
+      # the leading path component, so the artifact contains flat files at its
+      # root (evaluation_*.csv, graphs/, *.md …) with no provider/ subdirectory.
+      # The publish-results job reconstructs results/<provider>/ from the artifact
+      # name.
       - name: Upload results as artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: "eval-results-${{ matrix.provider }}"
-          path: results/
+          path: results/${{ matrix.provider }}/
           retention-days: 7
 
       # ── 15. Cleanup ───────────────────────────────────────────────────────────
@@ -382,58 +371,74 @@ jobs:
 
       - name: Merge artifacts into results/
         run: |
-          # Each artifact already has the results/<provider>/ structure produced by
-          # make all PROVIDER=<provider> (RESULTS_DIR = results/$(PROVIDER)).
-          # Just copy each artifact tree straight into the workspace.
+          # Each artifact was uploaded from path: results/<provider>/ so it
+          # contains flat files at its root (evaluation_*.csv, graphs/, *.md …)
+          # with NO provider/ subdirectory.  We reconstruct results/<provider>/
+          # from the artifact name so the final layout is results/openai/ and
+          # results/google/.
           for artifact_dir in /tmp/artifacts/eval-results-*/; do
             provider=$(basename "$artifact_dir" | sed 's/eval-results-//')
-            echo "Merging: $provider"
-            cp -r "$artifact_dir"/* . 2>/dev/null || true
+            echo "Merging provider: $provider"
+            mkdir -p "results/${provider}"
+            cp -r "$artifact_dir"/* "results/${provider}/" 2>/dev/null || true
           done
-          ls -la results/
+          echo "--- results/ tree after merge ---"
+          find results/ -maxdepth 3 | sort
 
       - name: Generate combined RESULTS.md
         run: python scripts/generate_results.py
 
-      - name: Read RESULTS.md for PR body
-        id: read_results
-        run: |
-          CONTENT=$(cat RESULTS.md 2>/dev/null | head -c 60000 || echo '_No results generated._')
-          DELIM="RESULTS_$(date +%s)"
-          printf '%s\n' "RESULTS_BODY<<${DELIM}" >> $GITHUB_OUTPUT
-          printf '%s\n' "${CONTENT}"              >> $GITHUB_OUTPUT
-          printf '%s\n' "${DELIM}"                >> $GITHUB_OUTPUT
-
-      - name: Stage and create PR
+      - name: Commit and push results
         run: |
           git config user.email 'kiali-dev@googlegroups.com'
           git config user.name  'kiali-bot'
-          git add -f RESULTS.md results/ 2>/dev/null || true
+
+          BRANCH="results/${{ inputs.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+
+          # Force-add bypasses .gitignore so CSV/JSON/graphs/RESULTS.md all land
+          # in the commit even if they match local ignore patterns.
+          git add -f RESULTS.md results/
+          echo "--- staged files ($(git diff --cached --name-only | wc -l) total) ---"
+          git diff --cached --name-only | sort
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — skipping push"
+            echo "BRANCH_PUSHED=false" >> $GITHUB_ENV
+          else
+            git commit -m "results: ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
+            git push origin "$BRANCH"
+            echo "BRANCH_PUSHED=true" >> $GITHUB_ENV
+          fi
+          echo "RESULT_BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          committer: "kiali-bot <kiali-dev@googlegroups.com>"
-          author: "kiali-bot <kiali-dev@googlegroups.com>"
-          branch: "results/${{ inputs.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
-          commit-message: "results: ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
-          title: "📊 Results — ${{ inputs.scenario }} / ${{ inputs.provider }}"
-          body: |
-            ## Evaluation run
+        if: env.BRANCH_PUSHED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Build PR header (printf avoids leading-space issues from YAML indentation)
+          printf '%s\n' \
+            "## Evaluation run" \
+            "" \
+            "| | |" \
+            "|---|---|" \
+            "| **Scenario** | \`${{ inputs.scenario }}\` |" \
+            "| **Provider** | \`${{ inputs.provider }}\` |" \
+            "| **Wait seconds** | \`${{ inputs.wait_seconds }}\` |" \
+            "| **Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" \
+            "" \
+            "---" \
+            "" \
+            > /tmp/pr-body.md
 
-            | | |
-            |---|---|
-            | **Scenario** | `${{ inputs.scenario }}` |
-            | **Provider** | `${{ inputs.provider }}` |
-            | **Wait seconds** | `${{ inputs.wait_seconds }}` |
-            | **Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          # Append RESULTS.md content (truncated to ~60 KB for GitHub's limit)
+          cat RESULTS.md 2>/dev/null | head -c 60000 >> /tmp/pr-body.md \
+            || echo '_No results generated._' >> /tmp/pr-body.md
 
-            ---
-
-            ${{ steps.read_results.outputs.RESULTS_BODY }}
-          add-paths: |
-            RESULTS.md
-            results/
-          delete-branch: false
-          labels: "evaluation,results"
+          gh pr create \
+            --head "$RESULT_BRANCH" \
+            --base "${{ github.ref_name }}" \
+            --title "📊 Results — ${{ inputs.scenario }} / ${{ inputs.provider }}" \
+            --body-file /tmp/pr-body.md \
+            --label "evaluation,results"

@@ -230,14 +230,14 @@ def generate_detail_md(run: ConvRun, sc: dict, output: Path) -> None:
     if primary:
         g = graphs[primary]
         label = primary.replace("_", " ").title()
-        rel = g.relative_to(output.parent)
+        rel = g.resolve().relative_to(output.resolve().parent)
         lines += [f"## {label}", "", f"![{label}]({rel})", ""]
     other_graphs = {k: v for k, v in graphs.items() if k != primary}
     if other_graphs:
         lines += ["<details>", "<summary>More graphs</summary>", ""]
         for key, g in sorted(other_graphs.items()):
             label = key.replace("_", " ").title()
-            rel = g.relative_to(output.parent)
+            rel = g.resolve().relative_to(output.resolve().parent)
             lines += [f"### {label}", "", f"![{label}]({rel})", ""]
         lines += ["</details>", ""]
 
@@ -340,6 +340,14 @@ def generate_detail_md(run: ConvRun, sc: dict, output: Path) -> None:
 
 # ── Root summary RESULTS.md ───────────────────────────────────────────────────
 
+def detail_page_path(run: ConvRun) -> Path:
+    """Return the path where the detail page for this run should be written.
+    Co-locating it next to the CSV (in the provider subdirectory) keeps it
+    out of the root-level gitignore patterns (results/*.md)."""
+    safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", run.model_label)
+    return run.csv_path.parent / f"{run.gid}_{safe_model}.md"
+
+
 def generate_summary_md(runs: list[ConvRun], scenarios: dict, output: Path) -> None:
     """Comparison table: rows=conversations, columns=api models."""
 
@@ -407,9 +415,8 @@ def generate_summary_md(runs: list[ConvRun], scenarios: dict, output: Path) -> N
                 e = o.get("ERROR", 0)
                 rate_pct = f"{p/tot*100:.0f}%" if tot else "—"
                 icon = "✅" if f + e == 0 else ("❌" if p == 0 else "🟡")
-                # Link to detail page
-                safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", model)
-                detail = f"results/{gid}_{safe_model}.md"
+                # Link to detail page — path relative to the RESULTS.md location
+                detail = str(detail_page_path(run).resolve().relative_to(output.resolve().parent))
                 cells.append(f"[{icon} {rate_pct} ({p}/{tot})]({detail})")
             else:
                 cells.append("—")
@@ -455,8 +462,7 @@ def generate_summary_md(runs: list[ConvRun], scenarios: dict, output: Path) -> N
         for model in all_models:
             run = run_index.get((gid, model))
             if run:
-                safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", model)
-                detail = f"results/{gid}_{safe_model}.md"
+                detail = str(detail_page_path(run).resolve().relative_to(output.resolve().parent))
                 o = run.overall
                 p, tot = o.get("PASS", 0), o.get("TOTAL", 0)
                 rate = f"{p/tot*100:.0f}%" if tot else "—"
@@ -507,12 +513,12 @@ def main() -> None:
                 if ef.exists():
                     all_scenarios.update(load_scenarios(ef))
 
-    # Generate per-run detail pages
+    # Generate per-run detail pages — written next to the CSV data so they
+    # live in results/<provider>/ and are not covered by the root gitignore.
     print("Generating detail pages:")
     for run in runs:
         sc = all_scenarios.get(run.gid, {})
-        safe_model = re.sub(r"[^a-zA-Z0-9._-]", "-", run.model_label)
-        detail_output = results_dir / f"{run.gid}_{safe_model}.md"
+        detail_output = detail_page_path(run)
         generate_detail_md(run, sc, detail_output)
 
     # Generate root summary

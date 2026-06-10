@@ -382,12 +382,13 @@ jobs:
 
       - name: Merge artifacts into results/
         run: |
-          # Reconstruct results/ from each provider's artifact
+          # Each artifact already has the results/<provider>/ structure produced by
+          # make all PROVIDER=<provider> (RESULTS_DIR = results/$(PROVIDER)).
+          # Just copy each artifact tree straight into the workspace.
           for artifact_dir in /tmp/artifacts/eval-results-*/; do
             provider=$(basename "$artifact_dir" | sed 's/eval-results-//')
             echo "Merging: $provider"
-            mkdir -p "results/${provider}"
-            cp -r "$artifact_dir"/* "results/${provider}/" 2>/dev/null || true
+            cp -r "$artifact_dir"/* . 2>/dev/null || true
           done
           ls -la results/
 

@@ -19,6 +19,8 @@ WAIT_SECONDS ?= 200   # seconds to wait after setup/cleanup for metrics to propa
 # Base eval command — shared by all targets
 # SYSTEM_CONFIG and OLS_PROVIDER_CONFIG_FILE are set by PROVIDER in the root Makefile
 
+RESULTS_DIR ?= results/$(PROVIDER)
+
 EVAL_BASE = OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
             GEMINI_API_KEY=$${GEMINI_API_KEY:-$$(cat "$(GEMINI_KEY_FILE)")} \
             GOOGLE_APPLICATION_CREDENTIALS=$(HOME)/.gcp/gcp_credentials.txt \
@@ -27,14 +29,14 @@ EVAL_BASE = OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")} \
             KUBECTL=$(KUBECTL) \
             venv/bin/lightspeed-eval \
             --system-config $(SYSTEM_CONFIG) \
-            --output-dir results/ \
+            --output-dir $(RESULTS_DIR) \
             --eval-data $(CONVERSATIONS)
 
 # ── clean-results: wipe provider-specific evaluation output ───────────────────
 clean-results:
-	rm -rf results/
+	rm -rf $(RESULTS_DIR)
 
-# ── generate-results: build RESULTS.md from the latest run ────────────────────
+# ── generate-results: build RESULTS.md aggregating all provider subfolders ────
 generate-results: check-venv
 	venv/bin/python scripts/generate_results.py --results-dir results/
 

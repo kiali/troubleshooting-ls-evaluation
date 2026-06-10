@@ -1,7 +1,7 @@
 # ✅ check_mesh_status
 
 **OLS model:** `google_vertex/gemini-2.5-pro` &nbsp;|&nbsp; **Judge:** `vertex/gemini-2.5-pro`  
-**Run:** 2026-06-09 16:11:40 &nbsp;|&nbsp; **Evaluations:** 3 &nbsp;|&nbsp; ✅ 3 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
+**Run:** 2026-06-10 13:25:24 &nbsp;|&nbsp; **Evaluations:** 3 &nbsp;|&nbsp; ✅ 3 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
 
 > Single-turn health check: agent reports the overall mesh and service health.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260609_161140_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260610_132524_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260609_161140_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260610_132524_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260609_161140_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260610_132524_status_breakdown.png)
 
 </details>
 
@@ -70,7 +70,7 @@ Option 3: `bookinfo` + `service`
 - `kiali_get_mesh_status`()
 - `namespaces_list`()
 - `kiali_get_mesh_traffic_graph`(namespaces=bookinfo)
-- `kiali_get_resource_details`(resourceType=service, namespaces=bookinfo)
+- `kiali_get_resource_details`(namespaces=bookinfo, resourceType=app)
 
 </details>
 
@@ -78,24 +78,21 @@ Option 3: `bookinfo` + `service`
 <summary>Agent response</summary>
 
 ```
-The service mesh and the Bookinfo services are generally healthy, with one exception in the observability stack.
+The Bookinfo services and the service mesh are generally healthy, with one minor issue in the observability stack.
 
-### **Service Mesh Health**
-
-*   **Control Plane**: The Istio control plane (istiod) is **Healthy**.
-*   **Data Plane**: The data plane for the `bookinfo` namespace is **Healthy**. All service-to-service communication is healthy with mTLS enabled.
+### Service Mesh Health: Healthy
+*   **Control Plane**: The Istio control plane (`istiod`) is `Healthy`.
+*   **Data Plane**: The `bookinfo` namespace is `Healthy`.
 *   **Observability**:
-    *   Prometheus and Jaeger are **Healthy**.
-    *   **Degraded**: Grafana is **Unreachable**. This will prevent you from viewing Grafana dashboards.
+    *   Prometheus and Jaeger are `Healthy`.
+    *   Grafana is `Unreachable`. This means Grafana dashboards are currently unavailable, but this does not impact the Bookinfo application itself.
 
-### **Bookinfo Application Health**
+### Bookinfo Application Health: Healthy
+All applications within the `bookinfo` namespace are healthy and serving traffic correctly.
 
-All services within the `bookinfo` application are **Healthy**.
-
-*   **Services**: `details`, `productpage`, `ratings`, and `reviews` are all healthy.
-*   **Traffic**: The traffic graph shows healthy communication between all services.
-    *   `istio-ingressgateway` is directing traffic to `productpage`.
-    *   `productpage` is communicating with `details` and all three versions of the `reviews` service (`v1`, `v2`, `v3`…
+*   **Applications**: The `details`, `productpage`, `ratings`, and `reviews` applications all report a `Healthy` status.
+*   **Traffic**: The traffic graph shows healthy communication between all services in the `bookinfo` namespace, with mTLS enabled. There are no indications of high latency or errors.
+    *   The `productpage` service is communicating successfully…
 ```
 
 </details>
@@ -109,5 +106,5 @@ The agent should report the current health status of the Istio service mesh by q
 
 ---
 
-*Tokens — Judge: 1,674 | API: 10,027 | Total: 11,701*
-*Latency — mean: 21.4s | p95: 21.4s*
+*Tokens — Judge: 1,504 | API: 9,946 | Total: 11,450*
+*Latency — mean: 15.7s | p95: 15.7s*

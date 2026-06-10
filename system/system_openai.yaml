@@ -27,7 +27,7 @@ api:
   endpoint_type: query
   timeout: 300
   provider: "openai"
-  model: "gpt-5.4-mini"   # must match olsconfig-openai.yaml default_model
+  model: "gpt-5"   # must match olsconfig-openai.yaml default_model
   no_tools: null
   system_prompt: null
   cache_enabled: false

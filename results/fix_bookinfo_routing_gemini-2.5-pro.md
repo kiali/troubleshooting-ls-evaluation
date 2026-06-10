@@ -110,7 +110,7 @@ The Istio `VirtualService` for the `reviews` service is not configured to send a
 <details>
 <summary>Expected response</summary>
 
-The agent should investigate and report that reviews-v3 (which shows red stars) is not receiving any traffic. It should identify that the traffic graph or service mesh configuration shows no requests going to reviews-v3, while reviews-v1 and reviews-v2 are active.
+The agent should investigate the Bookinfo routing and identify that the reviews VirtualService in the bookinfo namespace has a weight of 0 for reviews-v3, meaning reviews-v3 is intentionally excluded from receiving traffic by the Istio routing rules. The agent may observe that the traffic graph shows some recent traffic to reviews-v3 (due to the metrics window) but should ultimately point to the VirtualService configuration as the source of the routing problem. The agent should report that reviews-v1 and reviews-v2 receive traffic while reviews-v3 is configured to receive none.
 
 </details>
 
@@ -189,7 +189,7 @@ spec:
 <details>
 <summary>Expected response</summary>
 
-The root cause is a VirtualService named reviews in the bookinfo namespace that sets the traffic weight for reviews-v3 to 0. The VirtualService routes 50% of traffic to reviews-v1 and 50% to reviews-v2, leaving reviews-v3 with a weight of 0 so it receives no requests.
+The root cause is the reviews VirtualService in the bookinfo namespace: it explicitly sets the weight for reviews-v3 to 0 (or omits it entirely, which defaults to 0), routing all traffic to reviews-v1 and reviews-v2. Because reviews-v3 is the only version that renders red stars, it never serves requests and users never see red stars. The agent should clearly identify the VirtualService routing weights as the root cause — not any issue with the ratings service, missing deployments, or mTLS configuration.
 
 </details>
 

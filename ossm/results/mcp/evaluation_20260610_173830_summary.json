@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-06-10T17:38:30.561044+00:00",
+  "total_evaluations": 1,
+  "summary_stats": {
+    "overall": {
+      "TOTAL": 1,
+      "PASS": 1,
+      "FAIL": 0,
+      "ERROR": 0,
+      "SKIPPED": 0,
+      "pass_rate": 100.0,
+      "fail_rate": 0.0,
+      "error_rate": 0.0,
+      "skipped_rate": 0.0,
+      "total_judge_llm_input_tokens": 835,
+      "total_judge_llm_output_tokens": 305,
+      "total_judge_llm_tokens": 1140,
+      "total_embedding_tokens": 0,
+      "total_api_input_tokens": 18966,
+      "total_api_output_tokens": 528,
+      "total_api_tokens": 19494,
+      "total_tokens": 20634
+    },
+    "by_metric": {
+      "custom:answer_correctness": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 0.72,
+          "median": 0.72,
+          "std": 0.0,
+          "min": 0.72,
+          "max": 0.72,
+          "confidence_interval": null
+        }
+      }
+    },
+    "by_conversation": {
+      "check_mesh_status": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0
+      }
+    },
+    "by_tag": {
+      "check_mesh_Status": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 0.72,
+          "median": 0.72,
+          "std": 0.0,
+          "min": 0.72,
+          "max": 0.72,
+          "confidence_interval": null
+        }
+      }
+    },
+    "agent_latency_stats": {
+      "count": 1,
+      "mean": 28.744899307999958,
+      "median": 28.744899307999958,
+      "std": 0.0,
+      "min": 28.744899307999958,
+      "max": 28.744899307999958,
+      "p95": 28.744899307999958,
+      "p99": 28.744899307999958
+    }
+  },
+  "configuration": {
+    "llm": {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "ssl_verify": true,
+      "ssl_cert_file": null,
+      "temperature": 0.0,
+      "max_tokens": 5000,
+      "timeout": 300,
+      "num_retries": 3,
+      "cache_enabled": true,
+      "parameters": {
+        "temperature": 0.0,
+        "max_completion_tokens": 5000
+      }
+    },
+    "embedding": {
+      "provider": "openai",
+      "model": "text-embedding-3-small",
+      "provider_kwargs": null,
+      "cache_enabled": false
+    },
+    "api": {
+      "api_base": "http://0.0.0.0:8080",
+      "version": "v1",
+      "endpoint_type": "query",
+      "timeout": 300,
+      "provider": "openai",
+      "model": "gpt-5",
+      "no_tools": null,
+      "system_prompt": null,
+      "extra_request_params": {
+        "mode": "troubleshooting"
+      },
+      "cache_enabled": false,
+      "num_retries": 3,
+      "enabled": true,
+      "mcp_headers": null
+    }
+  },
+  "results": [
+    {
+      "conversation_group_id": "check_mesh_status",
+      "tag": "check_mesh_Status",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "PASS",
+      "score": 0.72,
+      "threshold": null,
+      "execution_time": 31.77764816599995,
+      "evaluation_latency": 3.032748857999991,
+      "judge_llm_input_tokens": 835,
+      "judge_llm_output_tokens": 305,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 0.72,
+          "reason": "Custom answer correctness: 0.72 - The response is mostly aligned with the expected format and correctly identifies a key issue: Grafana is unreachable in Kiali, while the control plane and monitored namespaces are reported as healthy. It is also structured as a mesh health assessment with summary, evidence, and recommendations, which matches the expected style.",
+          "judge_input_tokens": 835,
+          "judge_output_tokens": 305,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 28.744899307999958,
+      "tokens_per_second": null
+    }
+  ]
+}

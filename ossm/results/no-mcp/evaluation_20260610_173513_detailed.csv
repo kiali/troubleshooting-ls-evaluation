@@ -1,0 +1,3 @@
+conversation_group_id,turn_id,metric_identifier,score,threshold,result,reason,query,response,tool_calls,expected_tool_calls,execution_time
+check_mesh_status_no_kiali,diagnose,custom:answer_correctness,,,ERROR,"API Error for turn diagnose: API error: 400 - {""detail"":""Bad request: No auth header found""}","Check the status of the mesh and identify any issues.
+",,,,0.0

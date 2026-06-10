@@ -1,0 +1,64 @@
+# Evaluation data for check_mesh_status
+
+
+- conversation_group_id: check_mesh_status
+  tag: check_mesh_Status
+  description: "Check the status of the mesh and identify any issues."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Check the status of the mesh and identify any issues.
+      expected_response: >
+        The agent should provide a structured Istio mesh health assessment grounded
+        in Kiali tool output, typically organized as:
+
+        Summary — report control plane health (istiod in istio-system, version, status),
+        observability stack health (Prometheus, Grafana, Tempo reachability), and data
+        plane / namespace health (e.g. bookinfo overall status, availability, error rate,
+        and any top unhealthy applications).
+
+        Evidence — cite concrete findings from Kiali queries: workloads and services with
+        Healthy vs Failure/Degraded status; traffic graph edges showing healthy vs failing
+        request paths (including mTLS where shown); and relevant application or proxy
+        logs (e.g. repeated 503 errors between services).
+
+        Analysis — when issues exist, identify degraded namespaces, services, or workloads,
+        explain likely root causes with supporting evidence (such as misrouting to
+        non-existent subsets, VirtualService/DestinationRule mismatches, or mTLS policy
+        issues), and list recommended next steps or fixes. When the mesh is healthy,
+        confirm that control plane, observability, and data plane components are healthy.
+      turn_metrics:
+        - custom:answer_correctness
+
+- conversation_group_id: check_mesh_status_no_kiali
+  tag: no_kiali
+  description: "Check the status of the mesh and identify any issues."
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Check the status of the mesh and identify any issues.
+      expected_response: >
+        Without Kiali tools, the agent should still provide a structured Istio mesh
+        health assessment grounded in cluster-native evidence (oc/kubectl, istioctl,
+        certificate or proxy status output), typically organized as:
+
+        Assessment summary — report overall mesh status from available evidence, such as
+        workload SPIFFE identities and certificate availability (leaf and root certs,
+        NotBefore/NotAfter, Available=true/false), and note whether identities appear
+        consistent across workloads and namespaces.
+
+        Issues found — when problems exist, list numbered findings with severity,
+        concrete evidence from the tool output (e.g. missing leaf certificate for a
+        workload, inconsistent spiffe:// identity format or trust domain, expired or
+        soon-to-expire certs), and the likely impact on mTLS or mesh connectivity.
+
+        Next steps to fix/verify — provide actionable remediation or validation steps
+        using oc/kubectl and istioctl commands, such as checking sidecar injection,
+        proxy SDS secrets, ServiceAccount/annotations, restarting affected workloads,
+        verifying SMCP/SMMR trust domain configuration, and inspecting proxy certificate
+        rotation. When the mesh appears healthy, confirm certificates and identities
+        are present and valid for the inspected workloads.
+      turn_metrics:
+        - custom:answer_correctness

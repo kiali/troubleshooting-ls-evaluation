@@ -294,7 +294,7 @@ jobs:
             echo "BRANCH_PUSHED=false" >> $GITHUB_ENV
           else
             git commit -m "results: OSSM openai with-MCP=${MCP_RESULT} without-MCP=${NOMCP_RESULT} (run ${{ github.run_id }})"
-            git push -u origin "$BRANCH"
+            git push -f -u origin "$BRANCH"
             echo "BRANCH_PUSHED=true" >> $GITHUB_ENV
           fi
           echo "RESULT_BRANCH=$BRANCH" >> $GITHUB_ENV

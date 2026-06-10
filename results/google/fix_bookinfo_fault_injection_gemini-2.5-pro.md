@@ -75,6 +75,10 @@ Option 2: `bookinfo` + `ratings` + `503`
 *Alt 5:*
   - `kiali_manage_istio_config_read`(namespace=bookinfo, action=list, kind=VirtualService)
 
+*Alt 6:*
+  - `kiali_manage_istio_config_read`(namespace=bookinfo, action=list)
+  - `kiali_manage_istio_config_read`(namespace=bookinfo, action=get, kind=VirtualService, object=ratings, group=networking.istio.io, version=v1)
+
 </details>
 
 <details>

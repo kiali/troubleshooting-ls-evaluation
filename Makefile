@@ -62,6 +62,7 @@ endif
 
 # ── Include evaluation targets ─────────────────────────────────────────────────
 include scenarios/scenarios.mk
+include ossm/ossm_scenarios.mk
 
 EMBEDDING_MODEL ?= sentence-transformers/all-mpnet-base-v2
 

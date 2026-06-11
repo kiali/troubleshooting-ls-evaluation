@@ -1,8 +1,10 @@
 name: Evaluation — On Demand
 
 # ── Trigger ────────────────────────────────────────────────────────────────────
-# Triggered manually from the GitHub UI (Actions → Run workflow).
-# Configuration inputs are typed at run time; credentials come from repo Secrets.
+# workflow_dispatch: manual run from Actions → Run workflow (full input control).
+# issue_comment:     PR comment "/run-tests [provider]" triggers the eval on the PR branch.
+#                    Provider is optional — defaults to openai. Only collaborators can trigger.
+#                    Examples: "/run-tests"  "/run-tests google"  "/run-tests all"
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +12,7 @@ on:
       provider:
         description: "LLM provider — 'all' runs both openai and google sequentially"
         required: true
-        default: "google"
+        default: "openai"
         type: choice
         options:
           - openai
@@ -41,27 +43,92 @@ on:
         default: "http://localhost:20001/kiali"
         type: string
 
+  issue_comment:
+    types: [created]
+
+# Cancel in-progress runs for the same PR/run to avoid wasting resources
+concurrency:
+  group: eval-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 # ── Permissions ───────────────────────────────────────────────────────────────
 permissions:
   contents: write       # push result branch
   pull-requests: write  # create/update the PR
+  issues: write         # post reaction to /run-tests comment
 
 # ── Jobs ───────────────────────────────────────────────────────────────────────
 jobs:
 
-  # ── Prepare: compute provider matrix ─────────────────────────────────────────
+  # ── Prepare: compute provider matrix, scenario, and PR ref ───────────────────
   prepare:
     runs-on: ubuntu-latest
+    # For issue_comment: only run when it's a PR comment, starts with /run-tests,
+    # and the author is a repo collaborator/member/owner.
+    if: >
+      github.event_name != 'issue_comment' || (
+        github.event.issue.pull_request != null &&
+        startsWith(github.event.comment.body, '/run-tests') &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
     outputs:
       providers: ${{ steps.matrix.outputs.providers }}
+      provider:  ${{ steps.matrix.outputs.provider }}
+      scenario:  ${{ steps.matrix.outputs.scenario }}
+      pr_ref:    ${{ steps.matrix.outputs.pr_ref }}
     steps:
       - id: matrix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ inputs.provider }}" = "all" ]; then
+          EVENT="${{ github.event_name }}"
+
+          # ── Provider ──────────────────────────────────────────────────────
+          if [ "$EVENT" = "issue_comment" ]; then
+            # Extract optional provider from "/run-tests [provider]"
+            RAW=$(echo "${{ github.event.comment.body }}" | \
+                  sed -n 's|^/run-tests[[:space:]]*\([^[:space:]]*\).*|\1|p')
+            case "$RAW" in
+              openai|google|all) PROVIDER="$RAW" ;;
+              *) PROVIDER="openai" ;;
+            esac
+          else
+            PROVIDER="${{ inputs.provider || 'openai' }}"
+          fi
+
+          # ── Scenario ──────────────────────────────────────────────────────
+          if [ "$EVENT" = "issue_comment" ]; then
+            SCENARIO="check_mesh_status"
+          else
+            SCENARIO="${{ inputs.scenario || 'check_mesh_status' }}"
+          fi
+
+          # ── Providers matrix ──────────────────────────────────────────────
+          if [ "$PROVIDER" = "all" ]; then
             echo 'providers=["openai","google"]' >> $GITHUB_OUTPUT
           else
-            echo 'providers=["${{ inputs.provider }}"]' >> $GITHUB_OUTPUT
+            echo "providers=[\"$PROVIDER\"]" >> $GITHUB_OUTPUT
           fi
+          echo "provider=$PROVIDER"   >> $GITHUB_OUTPUT
+          echo "scenario=$SCENARIO"   >> $GITHUB_OUTPUT
+
+          # ── PR ref for comment trigger (checkout the PR branch, not main) ─
+          if [ "$EVENT" = "issue_comment" ]; then
+            PR_REF=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }} \
+                     --jq '.head.ref')
+            echo "pr_ref=$PR_REF" >> $GITHUB_OUTPUT
+          else
+            echo "pr_ref=" >> $GITHUB_OUTPUT
+          fi
+
+      # Acknowledge /run-tests comment with a 🚀 reaction
+      - name: React to comment
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST --field content=rocket || true
 
   # ── Evaluate: runs once per provider in parallel ──────────────────────────────
   evaluate:
@@ -70,7 +137,7 @@ jobs:
       fail-fast: false   # don't cancel the other provider if one fails
       matrix:
         provider: ${{ fromJson(needs.prepare.outputs.providers) }}
-    name: "${{ inputs.scenario }} / ${{ matrix.provider }}"
+    name: "${{ needs.prepare.outputs.scenario }} / ${{ matrix.provider }}"
     runs-on: ubuntu-latest        # replace with self-hosted if you need more RAM
 
     # Secrets required (set in repo Settings → Secrets and Variables → Actions):
@@ -83,12 +150,16 @@ jobs:
       CLUSTER:        kind
       KUBECTL:        kubectl   # use kubectl for kind, not oc
       PROVIDER:       ${{ matrix.provider }}   # from matrix, not raw input
-      WAIT_SECONDS:   ${{ inputs.wait_seconds }}
-      KIALI_ENDPOINT: ${{ inputs.kiali_endpoint }}
+      WAIT_SECONDS:   ${{ inputs.wait_seconds || '180' }}
+      KIALI_ENDPOINT: ${{ inputs.kiali_endpoint || 'http://localhost:20001/kiali' }}
+      SCENARIO:       ${{ needs.prepare.outputs.scenario }}
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
+      # For /run-tests comment triggers, check out the PR branch, not main.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.pr_ref || github.sha }}
 
       # ── 2. Python setup ──────────────────────────────────────────────────────
       - uses: actions/setup-python@v5
@@ -312,7 +383,7 @@ jobs:
           [ -d venv ] || make setup
 
           # Matrix sets PROVIDER — run exactly this one provider
-          SCENARIO="${{ inputs.scenario }}"
+          # SCENARIO is set from the job env (computed by prepare)
           echo "::group::Provider: ${PROVIDER} / Scenario: ${SCENARIO}"
           if [ "$SCENARIO" = "all" ]; then
             make all PROVIDER=${PROVIDER} WAIT_SECONDS=${WAIT_SECONDS}
@@ -393,7 +464,7 @@ jobs:
           git config user.email 'kiali-dev@googlegroups.com'
           git config user.name  'kiali-bot'
 
-          BRANCH="results/${{ inputs.provider }}/${{ inputs.scenario }}-${{ github.run_id }}"
+          BRANCH="results/${{ needs.prepare.outputs.provider }}/${{ needs.prepare.outputs.scenario }}-${{ github.run_id }}"
           git checkout -b "$BRANCH"
 
           # Force-add bypasses .gitignore so CSV/JSON/graphs/RESULTS.md all land
@@ -406,7 +477,7 @@ jobs:
             echo "Nothing to commit — skipping push"
             echo "BRANCH_PUSHED=false" >> $GITHUB_ENV
           else
-            git commit -m "results: ${{ inputs.scenario }} / ${{ inputs.provider }} (run ${{ github.run_id }})"
+            git commit -m "results: ${{ needs.prepare.outputs.scenario }} / ${{ needs.prepare.outputs.provider }} (run ${{ github.run_id }})"
             git push origin "$BRANCH"
             echo "BRANCH_PUSHED=true" >> $GITHUB_ENV
           fi
@@ -423,9 +494,9 @@ jobs:
             "" \
             "| | |" \
             "|---|---|" \
-            "| **Scenario** | \`${{ inputs.scenario }}\` |" \
-            "| **Provider** | \`${{ inputs.provider }}\` |" \
-            "| **Wait seconds** | \`${{ inputs.wait_seconds }}\` |" \
+            "| **Scenario** | \`${{ needs.prepare.outputs.scenario }}\` |" \
+            "| **Provider** | \`${{ needs.prepare.outputs.provider }}\` |" \
+            "| **Wait seconds** | \`${{ inputs.wait_seconds || '180' }}\` |" \
             "| **Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" \
             "" \
             "---" \
@@ -439,6 +510,6 @@ jobs:
           gh pr create \
             --head "$RESULT_BRANCH" \
             --base "${{ github.ref_name }}" \
-            --title "📊 Results — ${{ inputs.scenario }} / ${{ inputs.provider }}" \
+            --title "📊 Results — ${{ needs.prepare.outputs.scenario }} / ${{ needs.prepare.outputs.provider }}" \
             --body-file /tmp/pr-body.md \
             --label "evaluation,results"

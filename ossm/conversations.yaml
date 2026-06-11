@@ -249,15 +249,10 @@
         Can you check the Istio VirtualService routing rules
         for the ratings service and find what's causing the problem?
       expected_response: >
-        TBD
-      turn_metrics:
-        - custom:answer_correctness
-
-    - turn_id: fix
-      query: >
-        Please fix it.
-      expected_response: >
-        TBD
+        The agent should find a fault injection rule in the ratings VirtualService
+        that aborts 100% of requests with HTTP 503, identify it as the cause of the
+        errors on the product page, and may note it is typically used for chaos
+        testing. The agent should offer to remove the rule to resolve the issue.
       turn_metrics:
         - custom:answer_correctness
 
@@ -342,25 +337,10 @@
         are taking several seconds. All pods are running fine. Can you investigate
         what is causing the latency and tell me which service is responsible?
       expected_response: >
-        TBD
-      turn_metrics:
-        - custom:answer_correctness
-
-    - turn_id: diagnose
-      query: >
-        Based on your findings, can you check the distributed traces for the
-        bookinfo namespace — especially for the ratings service — to pinpoint
-        exactly where the 3-second delay is introduced?
-      expected_response: >
-        TBD
-      turn_metrics:
-        - custom:answer_correctness
-
-    - turn_id: fix
-      query: >
-        Please remove the delay so the ratings service responds at normal speed.
-      expected_response: >
-        TBD
+        The agent should identify a fault injection rule in the ratings VirtualService
+        that adds a fixed delay (e.g. 7 seconds) to 100% of requests, attributing the
+        slow product page load to this intentional delay configuration. It may note
+        this is typically used for resilience testing and offer to remove the rule.
       turn_metrics:
         - custom:answer_correctness
 

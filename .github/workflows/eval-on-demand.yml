@@ -113,10 +113,12 @@ jobs:
           echo "scenario=$SCENARIO"   >> $GITHUB_OUTPUT
 
           # ── PR ref for comment trigger (checkout the PR branch, not main) ─
+          # Use refs/pull/NUMBER/head instead of the branch name: actions/checkout
+          # fetches branch names with a wildcard refspec that can fail on some
+          # GitHub runners, whereas the pull/<n>/head ref is always stable and
+          # works for both same-repo and fork PRs.
           if [ "$EVENT" = "issue_comment" ]; then
-            PR_REF=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }} \
-                     --jq '.head.ref')
-            echo "pr_ref=$PR_REF" >> $GITHUB_OUTPUT
+            echo "pr_ref=refs/pull/${{ github.event.issue.number }}/head" >> $GITHUB_OUTPUT
           else
             echo "pr_ref=" >> $GITHUB_OUTPUT
           fi

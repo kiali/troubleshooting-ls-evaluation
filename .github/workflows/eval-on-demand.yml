@@ -98,9 +98,9 @@ jobs:
 
           # ── Scenario ──────────────────────────────────────────────────────
           if [ "$EVENT" = "issue_comment" ]; then
-            SCENARIO="check_mesh_status"
+            SCENARIO="all"
           else
-            SCENARIO="${{ inputs.scenario || 'check_mesh_status' }}"
+            SCENARIO="${{ inputs.scenario || 'all' }}"
           fi
 
           # ── Providers matrix ──────────────────────────────────────────────

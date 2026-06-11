@@ -1,6 +1,6 @@
 # Evaluation Results
 
-**Latest run:** 2026-06-10 13:43:18 &nbsp;|&nbsp; **Conversations:** 4 &nbsp;|&nbsp; **Models tested:** 3
+**Latest run:** 2026-06-11 11:42:31 &nbsp;|&nbsp; **Conversations:** 4 &nbsp;|&nbsp; **Models tested:** 3
 
 ---
 
@@ -9,7 +9,7 @@
 | Model | Judge | ✅ Pass | ❌ Fail | ⚠️ Error | Pass Rate |
 |---|---|---|---|---|---|
 | `gemini-2.5-pro` | `vertex/gemini-2.5-pro` | 34 | 1 | 2 | 🟡 92% |
-| `gpt-5` | `openai/gpt-5.4-mini` | 36 | 1 | 0 | 🟡 97% |
+| `gpt-5` | `openai/gpt-5.4-mini` | 24 | 2 | 11 | 🟡 65% |
 | `gpt-5.4-mini` | `openai/gpt-5.4-mini` | 23 | 2 | 0 | 🟡 92% |
 
 ## Results by Conversation and Model
@@ -17,45 +17,45 @@
 | Conversation | `gemini-2.5-pro` | `gpt-5` | `gpt-5.4-mini` |
 |---|---|---|---|
 | `check_mesh_status` | [✅ 100% (3/3)](results/google/check_mesh_status_gemini-2.5-pro.md) | [✅ 100% (3/3)](results/openai/check_mesh_status_gpt-5.md) | [🟡 67% (2/3)](results/openai/check_mesh_status_gpt-5.4-mini.md) |
-| `fix_bookinfo_fault_injection` | [🟡 73% (8/11)](results/google/fix_bookinfo_fault_injection_gemini-2.5-pro.md) | [✅ 100% (11/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.md) | [🟡 91% (10/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.4-mini.md) |
-| `fix_bookinfo_routing` | [✅ 100% (11/11)](results/google/fix_bookinfo_routing_gemini-2.5-pro.md) | [✅ 100% (11/11)](results/openai/fix_bookinfo_routing_gpt-5.md) | [✅ 100% (11/11)](results/openai/fix_bookinfo_routing_gpt-5.4-mini.md) |
+| `fix_bookinfo_fault_injection` | [🟡 73% (8/11)](results/google/fix_bookinfo_fault_injection_gemini-2.5-pro.md) | [❌ 0% (0/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.md) | [🟡 91% (10/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.4-mini.md) |
+| `fix_bookinfo_routing` | [✅ 100% (11/11)](results/google/fix_bookinfo_routing_gemini-2.5-pro.md) | [🟡 91% (10/11)](results/openai/fix_bookinfo_routing_gpt-5.md) | [✅ 100% (11/11)](results/openai/fix_bookinfo_routing_gpt-5.4-mini.md) |
 | `troubleshoot_latency_trace` | [✅ 100% (12/12)](results/google/troubleshoot_latency_trace_gemini-2.5-pro.md) | [🟡 92% (11/12)](results/openai/troubleshoot_latency_trace_gpt-5.md) | — |
 
 ## Metric Breakdown by Model
 
 | Metric | `gemini-2.5-pro` | `gpt-5` | `gpt-5.4-mini` |
 |---|---|---|---|
-| `custom:answer_correctness` | 🟡 90% (9/10) | ✅ 100% (10/10) | 🟡 86% (6/7) |
-| `custom:keywords_eval` | 🟡 90% (9/10) | ✅ 100% (10/10) | ✅ 100% (7/7) |
-| `custom:tool_eval` | ✅ 100% (5/5) | 🟡 80% (4/5) | 🟡 67% (2/3) |
-| `deepeval:conversation_completeness` | ✅ 100% (3/3) | ✅ 100% (3/3) | ✅ 100% (2/2) |
-| `deepeval:conversation_relevancy` | 🟡 67% (2/3) | ✅ 100% (3/3) | ✅ 100% (2/2) |
-| `deepeval:knowledge_retention` | ✅ 100% (3/3) | ✅ 100% (3/3) | ✅ 100% (2/2) |
-| `geval:troubleshooting_continuity` | ✅ 100% (3/3) | ✅ 100% (3/3) | ✅ 100% (2/2) |
+| `custom:answer_correctness` | 🟡 90% (9/10) | 🟡 60% (6/10) | 🟡 86% (6/7) |
+| `custom:keywords_eval` | 🟡 90% (9/10) | 🟡 70% (7/10) | ✅ 100% (7/7) |
+| `custom:tool_eval` | ✅ 100% (5/5) | 🟡 60% (3/5) | 🟡 67% (2/3) |
+| `deepeval:conversation_completeness` | ✅ 100% (3/3) | 🟡 67% (2/3) | ✅ 100% (2/2) |
+| `deepeval:conversation_relevancy` | 🟡 67% (2/3) | 🟡 67% (2/3) | ✅ 100% (2/2) |
+| `deepeval:knowledge_retention` | ✅ 100% (3/3) | 🟡 67% (2/3) | ✅ 100% (2/2) |
+| `geval:troubleshooting_continuity` | ✅ 100% (3/3) | 🟡 67% (2/3) | ✅ 100% (2/2) |
 
 ## Scenario Detail Pages
 
 ### `check_mesh_status` — Single-turn health check: agent reports the overall mesh and service health.
 
 - [✅ `gemini-2.5-pro` — 100% (3/3)](results/google/check_mesh_status_gemini-2.5-pro.md) — 2026-06-10 13:25:24
-- [✅ `gpt-5` — 100% (3/3)](results/openai/check_mesh_status_gpt-5.md) — 2026-06-10 13:23:22
+- [✅ `gpt-5` — 100% (3/3)](results/openai/check_mesh_status_gpt-5.md) — 2026-06-11 11:25:26
 - [❌ `gpt-5.4-mini` — 67% (2/3)](results/openai/check_mesh_status_gpt-5.4-mini.md) — 2026-06-09 16:08:54
 
 ### `fix_bookinfo_fault_injection` — Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.
 
 - [❌ `gemini-2.5-pro` — 73% (8/11)](results/google/fix_bookinfo_fault_injection_gemini-2.5-pro.md) — 2026-06-10 13:34:20
-- [✅ `gpt-5` — 100% (11/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.md) — 2026-06-10 13:30:49
+- [❌ `gpt-5` — 0% (0/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.md) — 2026-06-11 11:34:45
 - [❌ `gpt-5.4-mini` — 91% (10/11)](results/openai/fix_bookinfo_fault_injection_gpt-5.4-mini.md) — 2026-06-09 16:16:07
 
 ### `fix_bookinfo_routing` — Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights.
 
 - [✅ `gemini-2.5-pro` — 100% (11/11)](results/google/fix_bookinfo_routing_gemini-2.5-pro.md) — 2026-06-10 13:24:43
-- [✅ `gpt-5` — 100% (11/11)](results/openai/fix_bookinfo_routing_gpt-5.md) — 2026-06-10 13:22:47
+- [❌ `gpt-5` — 91% (10/11)](results/openai/fix_bookinfo_routing_gpt-5.md) — 2026-06-11 11:24:49
 - [✅ `gpt-5.4-mini` — 100% (11/11)](results/openai/fix_bookinfo_routing_gpt-5.4-mini.md) — 2026-06-09 16:08:32
 
 ### `troubleshoot_latency_trace` — A 3-second delay fault is injected on the ratings service. The agent must identify the latency root cause using traces and fix the delay.
 
 - [✅ `gemini-2.5-pro` — 100% (12/12)](results/google/troubleshoot_latency_trace_gemini-2.5-pro.md) — 2026-06-10 13:43:18
-- [❌ `gpt-5` — 92% (11/12)](results/openai/troubleshoot_latency_trace_gpt-5.md) — 2026-06-10 13:38:47
+- [❌ `gpt-5` — 92% (11/12)](results/openai/troubleshoot_latency_trace_gpt-5.md) — 2026-06-11 11:42:31
 
 *Generated by `scripts/generate_results.py`*

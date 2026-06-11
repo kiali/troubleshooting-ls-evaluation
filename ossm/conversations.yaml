@@ -1,6 +1,66 @@
-# Evaluation data for check_mesh_status
+# Evaluation conversations for OSSM + LightSpeed troubleshooting evaluation.
+# Simplified version of scenarios/conversations.yaml — no tool_calls or expected_tool_calls.
 
 
+# ── fix_bookinfo_routing ──────────────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_routing
+  tag: fix_bookinfo_routing
+  description: "Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        In our Bookinfo app, the product page only ever shows black or no stars —
+        it never shows red stars. All Istio resources and services are deployed
+        in the 'bookinfo' namespace. Can you investigate and tell me what you find?
+        Please only report for now, do not make any changes yet.
+      expected_response: >
+        The agent should investigate the Bookinfo routing and identify that the
+        reviews VirtualService in the bookinfo namespace has a weight of 0 for
+        reviews-v3, meaning reviews-v3 is intentionally excluded from receiving
+        traffic by the Istio routing rules. The agent may observe that the traffic
+        graph shows some recent traffic to reviews-v3 (due to the metrics window)
+        but should ultimately point to the VirtualService configuration as the
+        source of the routing problem. The agent should report that reviews-v1 and
+        reviews-v2 receive traffic while reviews-v3 is configured to receive none.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: diagnose
+      query: >
+        What is the exact root cause? Can you check the Istio routing configuration
+        for the reviews service in the bookinfo namespace?
+      expected_response: >
+        The root cause is the reviews VirtualService in the bookinfo namespace:
+        it explicitly sets the weight for reviews-v3 to 0 (or omits it entirely,
+        which defaults to 0), routing all traffic to reviews-v1 and reviews-v2.
+        Because reviews-v3 is the only version that renders red stars, it never
+        serves requests and users never see red stars. The agent should clearly
+        identify the VirtualService routing weights as the root cause — not any
+        issue with the ratings service, missing deployments, or mTLS configuration.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: fix
+      query: >
+        Got it. Can you fix the routing so all three versions get equal traffic?
+      expected_response: >
+        The agent should update the reviews VirtualService to distribute traffic
+        equally across all three versions, setting each weight to approximately 33%.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+
+# ── check_mesh_status ─────────────────────────────────────────────────────────
 - conversation_group_id: check_mesh_status
   tag: check_mesh_Status
   description: "Check the status of the mesh and identify any issues."
@@ -74,3 +134,110 @@
         is healthy from what needs action.
       turn_metrics:
         - custom:answer_correctness
+
+
+# ── fix_bookinfo_fault_injection ──────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_fault_injection
+  tag: fault_injection_bookinfo
+  description: "Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        Some users are seeing errors on the Bookinfo product page — it looks like
+        the ratings service is broken. All pods are running and mTLS / auth policies
+        are not the issue. All Istio resources are in the 'bookinfo' namespace.
+        Can you check the Istio VirtualService routing rules
+        for the ratings service and find what's causing the problem?
+      expected_response: >
+        The agent should investigate the Bookinfo application and report that the
+        ratings service is returning errors (HTTP 503). It should identify symptoms
+        such as failed requests from the reviews service to ratings, error rates
+        visible in the traffic graph, or error messages in pod logs.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: root_cause
+      query: >
+        Can you identify the specific root cause?
+      expected_response: >
+        The root cause is a fault injection rule in the ratings VirtualService that
+        aborts 100% of requests with HTTP 503. The ratings VirtualService in the
+        bookinfo namespace contains a fault.abort block configured with httpStatus 503
+        and percentage value 100. The agent may explore other potential causes before
+        arriving at this conclusion. What matters is that the final diagnosis correctly
+        identifies the fault.abort configuration in the ratings VirtualService.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: fix
+      query: >
+        Please fix it.
+      expected_response: >
+        The agent should remove the fault injection rule from the ratings VirtualService,
+        either by patching it to remove the fault.abort block or by deleting the
+        VirtualService if it was created solely for the fault injection.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+
+# ── troubleshoot_latency_trace ────────────────────────────────────────────────
+- conversation_group_id: troubleshoot_latency_trace
+  tag: troubleshoot_latency_trace
+  description: "A 3-second delay fault is injected on the ratings service. The agent must identify the latency root cause using traces and fix the delay."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        The Bookinfo product page is loading very slowly — requests to the page
+        are taking several seconds. All pods are running fine. Can you investigate
+        what is causing the latency and tell me which service is responsible?
+      expected_response: >
+        The agent should investigate and identify that the ratings service is
+        causing significant latency. It should find evidence such as high response
+        times visible in the traffic graph, traces showing slow spans on the ratings
+        service, or metrics indicating elevated latency for ratings.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: diagnose
+      query: >
+        Based on your findings, can you check the distributed traces for the
+        bookinfo namespace — especially for the ratings service — to pinpoint
+        exactly where the 3-second delay is introduced?
+      expected_response: >
+        The agent should query distributed traces for the bookinfo namespace
+        and identify that the ratings service has traces with spans showing
+        a fixed delay of approximately 3 seconds. The root cause is a fault
+        injection delay rule in the ratings VirtualService configured with
+        fixedDelay of 3 seconds on 100% of requests.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval
+
+    - turn_id: fix
+      query: >
+        Please remove the delay so the ratings service responds at normal speed.
+      expected_response: >
+        The agent should remove the delay fault injection rule from the ratings
+        VirtualService, either by patching it to remove the fault.delay block
+        or by deleting the VirtualService entirely.
+      turn_metrics:
+        - custom:answer_correctness
+        - custom:keywords_eval

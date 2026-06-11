@@ -1,7 +1,7 @@
-# ✅ fix_bookinfo_routing
+# ❌ fix_bookinfo_routing
 
 **OLS model:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`  
-**Run:** 2026-06-10 13:22:47 &nbsp;|&nbsp; **Evaluations:** 11 &nbsp;|&nbsp; ✅ 11 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
+**Run:** 2026-06-11 16:20:31 &nbsp;|&nbsp; **Evaluations:** 11 &nbsp;|&nbsp; ✅ 9 PASS &nbsp; ❌ 2 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (82%)
 
 > Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260610_132247_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260611_162031_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260610_132247_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260611_162031_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260610_132247_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260611_162031_status_breakdown.png)
 
 </details>
 
@@ -28,13 +28,13 @@
 
 | Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |
 |---|---|---|---|---|---|
-| `custom:answer_correctness` | 3 | 0 | 0 | ✅ 100% | 0.98 |
+| `custom:answer_correctness` | 1 | 2 | 0 | 🟡 33% | 0.42 |
 | `custom:keywords_eval` | 3 | 0 | 0 | ✅ 100% | 1.00 |
 | `custom:tool_eval` | 1 | 0 | 0 | ✅ 100% | 1.00 |
 | `deepeval:conversation_completeness` | 1 | 0 | 0 | ✅ 100% | 0.67 |
 | `deepeval:conversation_relevancy` | 1 | 0 | 0 | ✅ 100% | 1.00 |
 | `deepeval:knowledge_retention` | 1 | 0 | 0 | ✅ 100% | 0.67 |
-| `geval:troubleshooting_continuity` | 1 | 0 | 0 | ✅ 100% | 0.88 |
+| `geval:troubleshooting_continuity` | 1 | 0 | 0 | ✅ 100% | 0.78 |
 
 ## Turns
 
@@ -46,8 +46,15 @@
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `████████████████` 0.98 |
+| `custom:answer_correctness` | ❌ FAIL | `██░░░░░░░░░░░░░░` 0.15 |
 | `custom:keywords_eval` | ✅ PASS | `████████████████` 1.00 |
+
+<details>
+<summary>Judge reasons (failures)</summary>
+
+**`custom:answer_correctness`:** Custom answer correctness: 0.15 - The response is largely inconsistent with the expected finding. The expected issue is that the `reviews` VirtualService in the `bookinfo` namespace routes **0% traffic to `reviews-v3`**, so `reviews-v3` is intentionally excluded and cannot generate red stars. Instead, the provided answer claims traffic is split acr
+
+</details>
 
 <details>
 <summary>Expected signals</summary>
@@ -75,11 +82,12 @@ Option 2: `reviews` + `routing`
 <details>
 <summary>Actual tool calls</summary>
 
-- `pods_list_in_namespace`(namespace=bookinfo)
+- `kiali_get_mesh_status`()
+- `kiali_get_mesh_traffic_graph`(namespaces=bookinfo)
+- `kiali_manage_istio_config_read`(action=list, namespace=bookinfo)
 - `resources_list`(apiVersion=apps/v1, kind=Deployment, namespace=bookinfo)
 - `resources_list`(apiVersion=v1, kind=Service, namespace=bookinfo)
-- `kiali_manage_istio_config_read`(action=list, namespace=bookinfo)
-- `kiali_get_mesh_traffic_graph`(namespaces=bookinfo, graphType=versionedApp)
+- `pods_list_in_namespace`(namespace=bookinfo)
 - `events_list`(namespace=bookinfo)
 - `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
 - `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, namespace=bookinfo, …)
@@ -90,25 +98,29 @@ Option 2: `reviews` + `routing`
 <summary>Agent response</summary>
 
 ```
-Diagnosis
+Findings (no changes made)
 
 Evidence
-- Namespace: bookinfo
-- Reviews workloads are all running and Ready:
-  - reviews-v1-7bbc4c5497-tnq59 (2/2), reviews-v2-7b5b4d5d65-mhd4p (2/2), reviews-v3-5bcf66d84f-kjwpv (2/2). Source: pods in bookinfo.
-- DestinationRule/bookinfo/reviews defines three subsets v1, v2, v3 correctly:
-  - host: reviews.bookinfo.svc.cluster.local
-  - subsets: v1 (labels: version=v1), v2 (labels: version=v2), v3 (labels: version=v3). Source: DestinationRule reviews (creationTimestamp 2026-06-10T13:14:45Z).
-- VirtualService/bookinfo/reviews routes only to v1 and v2, effectively excluding v3:
-  - spec.hosts: ["reviews.bookinfo.svc.cluster.local"]
-  - spec.http[0].route:
-    - v1 weight: 50
-    - v2 weight: 50
-    - v3 has no weight set (defaults to 0). The last-applied annotation explicitly shows v3 weight: 0.
-  - This configuration sends 0% of traffic to reviews v3. Source: VirtualService reviews (creationTimestamp 2026-06-10T13:14:45Z).
-
-Root cause
-- Traffic to the reviews service is int…
+- Workloads running in bookinfo:
+  - reviews: v1, v2, v3 pods are all Running
+    - pods: reviews-v1-7bbc4c5497-lngxl, reviews-v2-7b5b4d5d65-kmzts, reviews-v3-5bcf66d84f-ck2k8
+  - ratings: only v1 is deployed
+    - pod: ratings-v1-59d4b8b76f-2m97z
+  - details v1 and productpage v1 are Running
+- Mesh traffic (Istio graph, last 10m):
+  - productpage (v1) → reviews: traffic is split across v1, v2, and v3
+    - to reviews v1: throughput 432 req/10m
+    - to reviews v2: throughput 451 req/10m
+    - to reviews v3: throughput 178 req/10m
+  - reviews → ratings:
+    - reviews v2 → ratings v1: throughput 303 req/10m
+    - reviews v3 → ratings v1: throughput 131 req/10m
+- Istio config affecting reviews:
+  - DestinationRule reviews (bookinfo/reviews) defines subsets v1, v2, v3 by version label. Valid.
+  - VirtualService reviews (bookinfo/reviews) routes to:
+    - subset v1 weight 50
+    - subset v2 weight 50
+    - subset v3 weight unspecified (defaults to a sma…
 ```
 
 </details>
@@ -128,9 +140,16 @@ The agent should investigate the Bookinfo routing and identify that the reviews 
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `███████████████░` 0.95 |
+| `custom:answer_correctness` | ❌ FAIL | `███░░░░░░░░░░░░░` 0.20 |
 | `custom:keywords_eval` | ✅ PASS | `████████████████` 1.00 |
 | `custom:tool_eval` | ✅ PASS | `████████████████` 1.00 |
+
+<details>
+<summary>Judge reasons (failures)</summary>
+
+**`custom:answer_correctness`:** Custom answer correctness: 0.20 - The response is largely inconsistent with the expected root cause. The expected answer says the issue is the `reviews` VirtualService in the `bookinfo` namespace, specifically that `reviews-v3` has weight 0 (or is omitted), so traffic never reaches `reviews-v3`, which is the version that renders red stars.
+
+</details>
 
 <details>
 <summary>Expected signals</summary>
@@ -157,9 +176,11 @@ Option 2: `reviews` + `v3` + `VirtualService` + `routing`
 <summary>Actual tool calls</summary>
 
 - `kiali_manage_istio_config_read`(action=list, namespace=bookinfo)
-- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
-- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, namespace=bookinfo, …)
-- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, version=v1, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, version=v1, …)
+- `pods_list_in_namespace`(namespace=bookinfo)
+- `kiali_get_mesh_traffic_graph`(namespaces=bookinfo, graphType=versionedApp)
+- `resources_list`(apiVersion=v1, kind=Service, namespace=bookinfo)
 
 </details>
 
@@ -167,31 +188,28 @@ Option 2: `reviews` + `v3` + `VirtualService` + `routing`
 <summary>Agent response</summary>
 
 ```
-Diagnosis report (no changes made)
+Report (no changes made)
 
-Scope
-- Namespace: bookinfo
-- Service in question: reviews
-- Istio configs inspected: VirtualService/reviews, DestinationRule/reviews, VirtualService/bookinfo
+Exact root cause
+- The ratings v2 workload is not deployed in bookinfo, so every call from reviews to ratings goes to ratings v1, which only returns black stars. Therefore, the product page can never display red stars.
 
 Evidence
-1) VirtualService reviews routes 0% of traffic to v3
-- Resource: VirtualService networking.istio.io/v1 reviews (bookinfo)
-- Spec (effective):
-  - hosts: ["reviews.bookinfo.svc.cluster.local"]
-  - http[0].route:
-    - destination: subset v1, weight: 50
-    - destination: subset v2, weight: 50
-    - destination: subset v3, weight: 0 (weight omitted in spec but explicitly 0 in last-applied)
-- Annotation shows explicit intent to send 0% to v3:
-  - kubectl.kubernetes.io/last-applied-configuration includes:
-    - v1 weight: 50
-    - v2 weight: 50
-    - v3 weight: 0
-- Effect: Only v1 (no stars) and v2 (black stars) can be returned; v3 (red stars) never receives traffic.
+- Workloads present in bookinfo:
+  - reviews v1/v2/v3: Running
+    - pods: reviews-v1-7bbc4c5497-lngxl, reviews-v2-7b5b4d5d65-kmzts, reviews-v3-5bcf66d84f-ck2k8
+  - ratings: only v1 is present
+    - pod: ratings-v1-59d4b8b76f-2m97z
+  - details v1 and productpage v1: Running
+- Services in bookinfo:
+  - reviews (ClusterIP 10.96.113.248), ratings (ClusterIP 10.96.70.67), details, productpage. No ratings v2 Service/Pod exists.
+- Mesh traffic (last 10m):
+  - productpage v1 → reviews v1/v2/v3: throughput 449/487/149 respectively
+  - reviews v2 → ratings v1: throughput 326
+  - reviews v3 → ratings v1: throughput 105
+  - No traffic to a ratings v2 destination is observed.
 
-2) DestinationRule reviews defines all subsets correctly
-- Resource: DestinationRule networking.istio.io/v1 reviews (booki…
+Istio routing configuration for reviews (bookinfo)
+- DestinationRule re…
 ```
 
 </details>
@@ -211,7 +229,7 @@ The root cause is the reviews VirtualService in the bookinfo namespace: it expli
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `████████████████` 1.00 |
+| `custom:answer_correctness` | ✅ PASS | `██████████████░░` 0.90 |
 | `custom:keywords_eval` | ✅ PASS | `████████████████` 1.00 |
 
 <details>
@@ -232,8 +250,9 @@ Option 3: `reviews` + `fixed` + `routing`
 <summary>Actual tool calls</summary>
 
 - `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
-- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, namespace=bookinfo, …)
 - `kiali_manage_istio_config`(action=patch, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_get_mesh_traffic_graph`(namespaces=bookinfo, graphType=versionedApp)
 
 </details>
 
@@ -241,24 +260,27 @@ Option 3: `reviews` + `fixed` + `routing`
 <summary>Agent response</summary>
 
 ```
-Change applied
+Change applied (routing only)
 
-Action taken
-- Patched VirtualService reviews (networking.istio.io/v1) in namespace bookinfo to distribute traffic equally across all three subsets.
+What I changed
+- Resource: VirtualService reviews (bookinfo/reviews)
+- Update: set equal traffic weights across subsets v1, v2, v3 and included both short and FQDN hosts to ensure matching
+- New spec (effective):
+  - spec.hosts: ["reviews", "reviews.bookinfo.svc.cluster.local"]
+  - spec.http[0].route:
+    - v1 weight: 33
+    - v2 weight: 33
+    - v3 weight: 34
 
-Evidence (current config)
-- VirtualService/bookinfo/reviews spec:
-  - hosts: ["reviews.bookinfo.svc.cluster.local"]
-  - http[0].route:
-    - subset v1, weight: 33
-    - subset v2, weight: 33
-    - subset v3, weight: 34
-- DestinationRule/bookinfo/reviews already defined subsets v1, v2, v3 correctly:
-  - host: reviews.bookinfo.svc.cluster.local
-  - subsets: v1 (labels version=v1), v2 (labels version=v2), v3 (labels version=v3)
+Evidence
+- Patch result: Successfully patched VirtualService "reviews" in namespace "bookinfo"
+- Current manifest:
+  - hosts: ["reviews", "reviews.bookinfo.svc.cluster.local"]
+  - routes: v1 33, v2 33, v3 34
+- Mesh traffic (last 10m window) still shows prior imbalance (v1/v2/v3 ≈ 465/493/135 req/10m). This should converge toward equal distribution as the new routing takes effect over the next few minutes.
 
-Result
-- Traffic to the reviews service will now be split approximately equally among v1 (no stars), v2 (black stars), and v3 (red stars). You should begin seeing red stars intermittently on the product page once the change propagates through the mesh.
+Notes
+- Kiali validation warning: “More than one Virtual Service for same host.” This indicates another VirtualService in the mesh also references host “reviews.” It doesn’t block equal weighting…
 ```
 
 </details>
@@ -274,12 +296,12 @@ The agent should update the reviews VirtualService to distribute traffic equally
 
 | Metric | Result | Score |
 |---|---|---|
-| `geval:troubleshooting_continuity` | ✅ PASS | `██████████████░░` 0.88 |
+| `geval:troubleshooting_continuity` | ✅ PASS | `█████████████░░░` 0.78 |
 | `deepeval:conversation_relevancy` | ✅ PASS | `████████████████` 1.00 |
 | `deepeval:knowledge_retention` | ✅ PASS | `███████████░░░░░` 0.67 |
 | `deepeval:conversation_completeness` | ✅ PASS | `███████████░░░░░` 0.67 |
 
 ---
 
-*Tokens — Judge: 24,305 | API: 92,020 | Total: 116,325*
-*Latency — mean: 33.0s | p95: 57.2s*
+*Tokens — Judge: 27,735 | API: 62,107 | Total: 89,842*
+*Latency — mean: 46.2s | p95: 65.2s*

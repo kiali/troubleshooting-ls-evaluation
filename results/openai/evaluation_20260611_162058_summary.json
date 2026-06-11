@@ -1,0 +1,255 @@
+{
+  "timestamp": "2026-06-11T16:20:57.912682+00:00",
+  "total_evaluations": 3,
+  "summary_stats": {
+    "overall": {
+      "TOTAL": 3,
+      "PASS": 3,
+      "FAIL": 0,
+      "ERROR": 0,
+      "SKIPPED": 0,
+      "pass_rate": 100.0,
+      "fail_rate": 0.0,
+      "error_rate": 0.0,
+      "skipped_rate": 0.0,
+      "total_judge_llm_input_tokens": 923,
+      "total_judge_llm_output_tokens": 237,
+      "total_judge_llm_tokens": 1160,
+      "total_embedding_tokens": 0,
+      "total_api_input_tokens": 12887,
+      "total_api_output_tokens": 766,
+      "total_api_tokens": 13653,
+      "total_tokens": 14813
+    },
+    "by_metric": {
+      "custom:answer_correctness": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 0.92,
+          "median": 0.92,
+          "std": 0.0,
+          "min": 0.92,
+          "max": 0.92,
+          "confidence_interval": null
+        }
+      },
+      "custom:keywords_eval": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      },
+      "custom:tool_eval": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 1.0,
+          "median": 1.0,
+          "std": 0.0,
+          "min": 1.0,
+          "max": 1.0,
+          "confidence_interval": null
+        }
+      }
+    },
+    "by_conversation": {
+      "check_mesh_status": {
+        "pass": 3,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0
+      }
+    },
+    "by_tag": {
+      "healthy_env": {
+        "pass": 3,
+        "fail": 0,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 3,
+          "mean": 0.9733333333333334,
+          "median": 1.0,
+          "std": 0.046188021535170036,
+          "min": 0.92,
+          "max": 1.0,
+          "confidence_interval": {
+            "low": 0.9466666666666665,
+            "mean": 0.9733333333333333,
+            "high": 1.0266666666666664,
+            "confidence_level": 95.0
+          }
+        }
+      }
+    },
+    "agent_latency_stats": {
+      "count": 1,
+      "mean": 16.165169586000047,
+      "median": 16.165169586000047,
+      "std": 0.0,
+      "min": 16.165169586000047,
+      "max": 16.165169586000047,
+      "p95": 16.165169586000047,
+      "p99": 16.165169586000047
+    }
+  },
+  "configuration": {
+    "llm": {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "ssl_verify": true,
+      "ssl_cert_file": null,
+      "temperature": 0.0,
+      "max_tokens": 5000,
+      "timeout": 300,
+      "num_retries": 3,
+      "cache_enabled": true,
+      "parameters": {
+        "temperature": 0.0,
+        "max_completion_tokens": 5000
+      }
+    },
+    "embedding": {
+      "provider": "openai",
+      "model": "text-embedding-3-small",
+      "provider_kwargs": null,
+      "cache_enabled": false
+    },
+    "api": {
+      "api_base": "http://0.0.0.0:8080",
+      "version": "v1",
+      "endpoint_type": "query",
+      "timeout": 300,
+      "provider": "openai",
+      "model": "gpt-5",
+      "no_tools": null,
+      "system_prompt": null,
+      "extra_request_params": {
+        "mode": "troubleshooting"
+      },
+      "cache_enabled": false,
+      "num_retries": 3,
+      "enabled": true,
+      "mcp_headers": null
+    }
+  },
+  "results": [
+    {
+      "conversation_group_id": "check_mesh_status",
+      "tag": "healthy_env",
+      "turn_id": "health_check",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "PASS",
+      "score": 0.92,
+      "threshold": null,
+      "execution_time": 18.620708456000102,
+      "evaluation_latency": 2.455538870000055,
+      "judge_llm_input_tokens": 923,
+      "judge_llm_output_tokens": 237,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 0.92,
+          "reason": "Custom answer correctness: 0.92 - The response is largely correct and well aligned with the expected task. It reports the overall Istio mesh health, identifies the degraded component (Grafana unreachable), and states that Bookinfo workloads and the control/data plane are otherwise healthy. This matches the expectation to query Kiali and summarize mesh health, including any unhealthy namespaces or services.",
+          "judge_input_tokens": 923,
+          "judge_output_tokens": 237,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 16.165169586000047,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "check_mesh_status",
+      "tag": "healthy_env",
+      "turn_id": "health_check",
+      "metric_identifier": "custom:keywords_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 16.165257716000042,
+      "evaluation_latency": 8.8129999994635e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Keywords eval successful: Option 1 - all keywords matched: 'bookinfo'",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 16.165169586000047,
+      "tokens_per_second": null
+    },
+    {
+      "conversation_group_id": "check_mesh_status",
+      "tag": "healthy_env",
+      "turn_id": "health_check",
+      "metric_identifier": "custom:tool_eval",
+      "result": "PASS",
+      "score": 1.0,
+      "threshold": null,
+      "execution_time": 16.165246418000038,
+      "evaluation_latency": 7.683199999064527e-05,
+      "judge_llm_input_tokens": 0,
+      "judge_llm_output_tokens": 0,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 1.0,
+          "reason": "Primary pattern matched: Tool calls: 1/1 expected matched, 0 unmatched: none, 5 extra in response: [events_list, kiali_get_mesh_traffic_graph, kiali_get_resource_details, kiali_get_resource_details, pods_list_in_namespace] (partial, unordered)",
+          "judge_input_tokens": 0,
+          "judge_output_tokens": 0,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 16.165169586000047,
+      "tokens_per_second": null
+    }
+  ]
+}

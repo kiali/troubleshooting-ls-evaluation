@@ -11,8 +11,9 @@
 
 .PHONY: all test test-without-mcp generate-ossm-results \
         check_mesh_status-test check_mesh_status-test-without-mcp \
-        fix_bookinfo_routing-test fix_bookinfo_fault_injection-test \
-        troubleshoot_latency_trace-test
+        fix_bookinfo_routing-test fix_bookinfo_routing-test-without-mcp \
+        fix_bookinfo_fault_injection-test fix_bookinfo_fault_injection-test-without-mcp \
+        troubleshoot_latency_trace-test troubleshoot_latency_trace-test-without-mcp
 
 OSSM_CONVERSATIONS = ossm/conversations.yaml
 
@@ -46,6 +47,9 @@ all test: check-venv check-openai-key check-services check-bookinfo \
 	check_mesh_status-test
 
 test-without-mcp: check-venv check-openai-key check-services-ols \
+	fix_bookinfo_routing-test-without-mcp \
+	fix_bookinfo_fault_injection-test-without-mcp \
+	troubleshoot_latency_trace-test-without-mcp \
 	check_mesh_status-test-without-mcp
 
 # ── Individual conversation targets ───────────────────────────────────────────
@@ -54,13 +58,25 @@ fix_bookinfo_routing-test: check-venv check-openai-key check-services check-book
 	$(OSSM_EVAL_BASE) \
 	  --tag fix_bookinfo_routing
 
+fix_bookinfo_routing-test-without-mcp: check-venv check-openai-key check-services-ols
+	$(OSSM_EVAL_BASE) \
+	  --tag fix_bookinfo_routing_no_kiali
+
 fix_bookinfo_fault_injection-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
 	  --tag fault_injection_bookinfo
 
+fix_bookinfo_fault_injection-test-without-mcp: check-venv check-openai-key check-services-ols
+	$(OSSM_EVAL_BASE) \
+	  --tag fault_injection_no_kiali
+
 troubleshoot_latency_trace-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
 	  --tag troubleshoot_latency_trace
+
+troubleshoot_latency_trace-test-without-mcp: check-venv check-openai-key check-services-ols
+	$(OSSM_EVAL_BASE) \
+	  --tag latency_no_kiali
 
 check_mesh_status-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \

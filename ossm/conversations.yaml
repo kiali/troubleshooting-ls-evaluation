@@ -27,7 +27,6 @@
         that no changes have been made and offer to update the routing to include v3.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
 
     - turn_id: diagnose
       query: >
@@ -41,7 +40,6 @@
         identify the missing weight for v3 as the misconfiguration.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
 
     - turn_id: fix
       query: >
@@ -53,7 +51,60 @@
         it should note that black, red, and no-star reviews will all now be visible.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
+
+  setup_script: ../scenarios/fix_bookinfo_routing/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_routing/cleanup.sh
+
+
+# ── fix_bookinfo_routing_no_kiali ─────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_routing_no_kiali
+  tag: fix_bookinfo_routing_no_kiali
+  description: "Multi-turn without Kiali: reviews-v3 has weight 0. Agent investigates with kubectl, identifies the routing issue, and fixes weights."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        In our Bookinfo app, the product page only ever shows black or no stars —
+        it never shows red stars. All Istio resources and services are deployed
+        in the 'bookinfo' namespace. Can you investigate and tell me what you find?
+        Please only report for now, do not make any changes yet.
+      expected_response: >
+        The agent should inspect the Istio configuration in the bookinfo namespace
+        and identify that the DestinationRule for the reviews service is missing the
+        subset definition for v3. Although the VirtualService may route traffic to v3,
+        Istio cannot forward requests to an undefined subset, so reviews-v3 pods never
+        receive traffic and red stars are never displayed. The agent should confirm no
+        changes have been made.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: diagnose
+      query: >
+        What is the exact root cause? Can you check the Istio routing configuration
+        for the reviews service in the bookinfo namespace?
+      expected_response: >
+        The agent should identify a VirtualService (named bookinfo or reviews) that
+        routes 100% of traffic to reviews-v1, preventing v2 and v3 from receiving
+        any traffic. It should confirm no changes have been made and offer to adjust
+        the routing rules.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Got it. Can you fix the routing so all three versions get equal traffic?
+      expected_response: >
+        The agent should update the reviews VirtualService to distribute traffic
+        equally across all three versions (~33% each) and confirm the change was
+        applied.
+      turn_metrics:
+        - custom:answer_correctness
 
   setup_script: ../scenarios/fix_bookinfo_routing/setup.sh
   cleanup_script: ../scenarios/fix_bookinfo_routing/cleanup.sh
@@ -162,7 +213,6 @@
         The agent should offer to remove the fault injection rule to resolve the issue.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
 
     - turn_id: fix
       query: >
@@ -174,7 +224,42 @@
         fault.abort block has been patched out or the VirtualService deleted.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
+
+  setup_script: ../scenarios/fix_bookinfo_fault_injection/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
+
+
+# ── fix_bookinfo_fault_injection_no_kiali ─────────────────────────────────────
+- conversation_group_id: fix_bookinfo_fault_injection_no_kiali
+  tag: fault_injection_no_kiali
+  description: "Multi-turn without Kiali: 100% fault injection on ratings. Agent investigates with kubectl, identifies root cause, and fixes it."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Some users are seeing errors on the Bookinfo product page — it looks like
+        the ratings service is broken. All pods are running and mTLS / auth policies
+        are not the issue. All Istio resources are in the 'bookinfo' namespace.
+        Can you check the Istio VirtualService routing rules
+        for the ratings service and find what's causing the problem?
+      expected_response: >
+        TBD
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Please fix it.
+      expected_response: >
+        TBD
+      turn_metrics:
+        - custom:answer_correctness
 
   setup_script: ../scenarios/fix_bookinfo_fault_injection/setup.sh
   cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
@@ -206,7 +291,6 @@
         resilience testing.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
 
     - turn_id: diagnose
       query: >
@@ -225,7 +309,6 @@
         injection as the configured root cause.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
 
     - turn_id: fix
       query: >
@@ -236,7 +319,50 @@
         or by deleting the VirtualService entirely.
       turn_metrics:
         - custom:answer_correctness
-        - custom:keywords_eval
+
+  setup_script: ../scenarios/troubleshoot_latency_trace/setup.sh
+  cleanup_script: ../scenarios/troubleshoot_latency_trace/cleanup.sh
+
+
+# ── troubleshoot_latency_trace_no_kiali ───────────────────────────────────────
+- conversation_group_id: troubleshoot_latency_trace_no_kiali
+  tag: latency_no_kiali
+  description: "Multi-turn without Kiali: 3-second delay on ratings. Agent investigates with kubectl and traces, identifies root cause, and fixes the delay."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        The Bookinfo product page is loading very slowly — requests to the page
+        are taking several seconds. All pods are running fine. Can you investigate
+        what is causing the latency and tell me which service is responsible?
+      expected_response: >
+        TBD
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: diagnose
+      query: >
+        Based on your findings, can you check the distributed traces for the
+        bookinfo namespace — especially for the ratings service — to pinpoint
+        exactly where the 3-second delay is introduced?
+      expected_response: >
+        TBD
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Please remove the delay so the ratings service responds at normal speed.
+      expected_response: >
+        TBD
+      turn_metrics:
+        - custom:answer_correctness
 
   setup_script: ../scenarios/troubleshoot_latency_trace/setup.sh
   cleanup_script: ../scenarios/troubleshoot_latency_trace/cleanup.sh

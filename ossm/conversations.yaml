@@ -10,24 +10,27 @@
       query: >
         Check the status of the mesh and identify any issues.
       expected_response: >
-        The agent should provide a structured Istio mesh health assessment grounded
-        in Kiali tool output, typically organized as:
+        The agent should provide a structured Istio mesh health assessment using
+        Kiali's mesh status tool, typically organized as:
 
-        Summary — report control plane health (istiod in istio-system, version, status),
-        observability stack health (Prometheus, Grafana, Tempo reachability), and data
-        plane / namespace health (e.g. bookinfo overall status, availability, error rate,
-        and any top unhealthy applications).
+        Assessment summary — report control plane health (istiod version and status),
+        data plane health (monitored namespaces and overall status), and observability
+        stack reachability listing each component individually (Prometheus, Jaeger/Tempo,
+        Grafana) with a Healthy or Unreachable status.
 
-        Evidence — cite concrete findings from Kiali queries: workloads and services with
-        Healthy vs Failure/Degraded status; traffic graph edges showing healthy vs failing
-        request paths (including mTLS where shown); and relevant application or proxy
-        logs (e.g. repeated 503 errors between services).
+        Evidence — cite Kiali mesh status output directly: connection states, trust domain,
+        Istio and Kiali versions. When a component is Unreachable, follow up by checking
+        whether the corresponding pods and services exist (e.g. listing resources by label
+        in the control-plane namespace) to confirm whether it is undeployed or misconfigured.
 
-        Analysis — when issues exist, identify degraded namespaces, services, or workloads,
-        explain likely root causes with supporting evidence (such as misrouting to
-        non-existent subsets, VirtualService/DestinationRule mismatches, or mTLS policy
-        issues), and list recommended next steps or fixes. When the mesh is healthy,
-        confirm that control plane, observability, and data plane components are healthy.
+        Analysis — identify any Unreachable components and state:
+        the likely root cause (e.g. component not deployed vs. misconfigured URL),
+        the impact on mesh operations (e.g. dashboards unavailable while data plane
+        is unaffected), and two remediation paths: restore/deploy the missing component
+        or disable its integration in Kiali config to clear the warning.
+
+        Conclusion — confirm which components are healthy and summarize any remaining
+        action items clearly.
       turn_metrics:
         - custom:answer_correctness
 
@@ -40,25 +43,34 @@
       query: >
         Check the status of the mesh and identify any issues.
       expected_response: >
-        Without Kiali tools, the agent should still provide a structured Istio mesh
-        health assessment grounded in cluster-native evidence (oc/kubectl, istioctl,
-        certificate or proxy status output), typically organized as:
+        Without Kiali tools, the agent should provide a structured Istio mesh health
+        assessment using Kubernetes-native tools (namespaces_list, resources_list,
+        pods_list, events_list, pods_log), typically organized as:
 
-        Assessment summary — report overall mesh status from available evidence, such as
-        workload SPIFFE identities and certificate availability (leaf and root certs,
-        NotBefore/NotAfter, Available=true/false), and note whether identities appear
-        consistent across workloads and namespaces.
+        Control plane — verify istiod Deployment is available in istio-system and inspect
+        its logs for xDS push activity, sidecar injection events, and error patterns.
+        Report observability stack Deployment availability (Kiali, Prometheus, Jaeger).
+        Note gateway Deployments (ingressgateway, egressgateway) and their status.
 
-        Issues found — when problems exist, list numbered findings with severity,
-        concrete evidence from the tool output (e.g. missing leaf certificate for a
-        workload, inconsistent spiffe:// identity format or trust domain, expired or
-        soon-to-expire certs), and the likely impact on mTLS or mesh connectivity.
+        Data plane — list pods in application namespaces (e.g. bookinfo) and verify
+        sidecars are injected (expected 2/2 containers Ready); check for mTLS labels
+        (e.g. security.istio.io/tlsMode=istio); inspect events for injection activity
+        and any transient or persistent errors.
 
-        Next steps to fix/verify — provide actionable remediation or validation steps
-        using oc/kubectl and istioctl commands, such as checking sidecar injection,
-        proxy SDS secrets, ServiceAccount/annotations, restarting affected workloads,
-        verifying SMCP/SMMR trust domain configuration, and inspecting proxy certificate
-        rotation. When the mesh appears healthy, confirm certificates and identities
-        are present and valid for the inspected workloads.
+        Config/traffic management — inspect Istio config objects (Gateway, VirtualService)
+        to confirm routing is defined; verify Gateway selectors match the intended
+        ingressgateway and VirtualService hosts are correct.
+
+        Issues found — report numbered findings with severity when problems exist, each
+        including: concrete evidence from tool output (Deployment replicas, pod status,
+        log content, event messages), the impact on mesh operations, and a specific
+        remediation using kubectl (e.g. delete duplicate resources, patch labels).
+        Examples of findings: duplicate ingressgateway Deployments across namespaces,
+        image/label version mismatches, misconfigured Gateway selectors, or pods
+        missing sidecar injection.
+
+        Next steps and conclusion — provide kubectl commands to remediate identified
+        issues and conclude with the overall mesh status, clearly distinguishing what
+        is healthy from what needs action.
       turn_metrics:
         - custom:answer_correctness

@@ -229,35 +229,6 @@
   cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
 
 
-# ── fix_bookinfo_fault_injection_no_kiali ─────────────────────────────────────
-- conversation_group_id: fix_bookinfo_fault_injection_no_kiali
-  tag: fault_injection_no_kiali
-  description: "Multi-turn without Kiali: 100% fault injection on ratings. Agent investigates with kubectl, identifies root cause, and fixes it."
-
-  conversation_metrics:
-    - geval:troubleshooting_continuity
-    - deepeval:conversation_relevancy
-    - deepeval:knowledge_retention
-    - deepeval:conversation_completeness
-
-  turns:
-    - turn_id: diagnose
-      query: >
-        Some users are seeing errors on the Bookinfo product page — it looks like
-        the ratings service is broken. All pods are running and mTLS / auth policies
-        are not the issue. All Istio resources are in the 'bookinfo' namespace.
-        Can you check the Istio VirtualService routing rules
-        for the ratings service and find what's causing the problem?
-      expected_response: >
-        The agent should find a fault injection rule in the ratings VirtualService
-        that aborts 100% of requests with HTTP 503, identify it as the cause of the
-        errors on the product page, and may note it is typically used for chaos
-        testing. The agent should offer to remove the rule to resolve the issue.
-      turn_metrics:
-        - custom:answer_correctness
-
-  setup_script: ../scenarios/fix_bookinfo_fault_injection/setup.sh
-  cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
 
 
 # ── troubleshoot_latency_trace ────────────────────────────────────────────────

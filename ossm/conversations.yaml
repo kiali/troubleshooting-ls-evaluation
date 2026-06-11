@@ -7,48 +7,16 @@
   tag: fix_bookinfo_routing
   description: "Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights."
 
-  conversation_metrics:
-    - geval:troubleshooting_continuity
-    - deepeval:conversation_relevancy
-    - deepeval:knowledge_retention
-    - deepeval:conversation_completeness
 
   turns:
     - turn_id: investigate
       query: >
-        In our Bookinfo app, the product page only ever shows black or no stars —
-        it never shows red stars. All Istio resources and services are deployed
-        in the 'bookinfo' namespace. Can you investigate and tell me what you find?
-        Please only report for now, do not make any changes yet.
+        In our Bookinfo app, the product page only ever shows black or no stars.It never shows red stars.  All Istio resources and services are deployed in the 'bookinfo' namespace. Can you investigate and fix it?
       expected_response: >
         The agent should identify that the reviews VirtualService routes traffic
         only to v1 and v2, with v3 (the version that renders red stars) absent from
         the routing rules and therefore receiving no traffic. The agent should confirm
         that no changes have been made and offer to update the routing to include v3.
-      turn_metrics:
-        - custom:answer_correctness
-
-    - turn_id: diagnose
-      query: >
-        What is the exact root cause? Can you check the Istio routing configuration
-        for the reviews service in the bookinfo namespace?
-      expected_response: >
-        The root cause is the reviews VirtualService in the bookinfo namespace.
-        It routes traffic 50% to v1 and 50% to v2, with v3 present as a destination
-        but missing a weight field (defaults to 0). The agent should cite the relevant
-        section of the VirtualService spec showing the weight distribution and clearly
-        identify the missing weight for v3 as the misconfiguration.
-      turn_metrics:
-        - custom:answer_correctness
-
-    - turn_id: fix
-      query: >
-        Got it. Can you fix the routing so all three versions get equal traffic?
-      expected_response: >
-        The agent should update the reviews VirtualService to distribute traffic
-        equally across all three versions (~33% each) and confirm the change was
-        applied. It may ask for user confirmation before patching. After the fix,
-        it should note that black, red, and no-star reviews will all now be visible.
       turn_metrics:
         - custom:answer_correctness
 
@@ -61,11 +29,6 @@
   tag: fix_bookinfo_routing_no_kiali
   description: "Multi-turn without Kiali: reviews-v3 has weight 0. Agent investigates with kubectl, identifies the routing issue, and fixes weights."
 
-  conversation_metrics:
-    - geval:troubleshooting_continuity
-    - deepeval:conversation_relevancy
-    - deepeval:knowledge_retention
-    - deepeval:conversation_completeness
 
   turns:
     - turn_id: investigate
@@ -191,11 +154,6 @@
   tag: fault_injection_bookinfo
   description: "Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it."
 
-  conversation_metrics:
-    - geval:troubleshooting_continuity
-    - deepeval:conversation_relevancy
-    - deepeval:knowledge_retention
-    - deepeval:conversation_completeness
 
   turns:
     - turn_id: diagnose

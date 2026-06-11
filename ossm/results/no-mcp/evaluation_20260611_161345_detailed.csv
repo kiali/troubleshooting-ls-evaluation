@@ -1,0 +1,72 @@
+conversation_group_id,turn_id,metric_identifier,score,threshold,result,reason,query,response,tool_calls,expected_tool_calls,execution_time
+check_mesh_status_no_kiali,diagnose,custom:answer_correctness,0.78,,PASS,"Custom answer correctness: 0.78 - The response is largely aligned with the expected style and content: it gives a structured mesh health assessment, separates control plane/data plane/config, cites concrete Kubernetes-style evidence, and identifies actionable issues with remediation. It also correctly notes healthy istiod, gateways, observability pods, and injected bookinfo workloads.","Check the status of the mesh and identify any issues.
+","Assessment summary
+- Control plane (istio-system): healthy
+  - istiod-d468976dc-748k4 (1/1 Running), version 1.28.0
+  - istio-ingressgateway-7554995647-g7j2g (1/1 Running), version 1.28.0
+  - istio-egressgateway-69b8465445-vqt9k (1/1 Running), version 1.28.0
+  - Observability: jaeger-555f5df568-d6mgg (1/1 Running), kiali-79f9fc974c-576wc (1/1 Running), prometheus-6964c8fbb8-p2qfk (2/2 Running)
+- Data plane (bookinfo): healthy
+  - All app pods are 2/2 Ready with sidecars and mTLS indicated (security.istio.io/tlsMode=istio):
+    - details-v1-6cc9db646f-5pt7w, productpage-v1-574c45789d-jsqk6, ratings-v1-59d4b8b76f-57zxg, reviews-v1/v2/v3
+- Mesh config in bookinfo:
+  - Gateway: bookinfo/bookinfo-gateway
+  - VirtualService: bookinfo/bookinfo (hosts [""*""], gateways [""bookinfo-gateway""])
+  - No DestinationRules or PeerAuthentications found (defaults in effect)
+- Namespace config:
+  - bookinfo: istio-injection=enabled, istio.io/rev=default
+  - default: istio-injection=enabled (may be unintentional if you don’t want sidecars in default)
+
+Issues identified
+1) Duplicate ingress gateway in the application namespace
+   - Evidence:
+     - Deployment and Service exist in bookinfo:
+       - Deployment bookinfo/istio-ingressgateway (pod: istio-ingressgateway-6d65dbb4f5-tq5rs, Ready 1/1, SA=default)
+       - Service bookinfo/istio-ingressgateway (ClusterIP 10.96.119.189, ports 80, 443)
+     - A standard ingress gateway is already present and healthy in istio-system/istio-ingressgateway.
+   - Impact:
+     - Two ingress gateways can cause confusion, misrouting, and duplicate exposure paths. The app-namespace gateway is running as the default service account, which is weaker from an RBAC/least-privilege perspective.
+   - Recommendation (choose one):
+     - Remove the app-namespace ingress gateway (Deployment and Service) and use the control-plane gateway in istio-system; or
+     - If you intentionally want a namespace-scoped gateway, create/use a dedicated ServiceAccount with appropriate RBAC, and clearly scope Gateway/VirtualService selectors so traffic targets the intended gateway only.
+
+2) Transient control-plane creation warnings about missing ServiceAccounts
+   - Evidence (events in istio-system):
+     - FailedCreate: serviceaccount ""istiod"" not found (ReplicaSet istiod-d468976dc)
+     - FailedCreate: serviceaccount ""istio-ingressgateway-service-account"" not found
+     - FailedCreate: serviceaccount ""istio-egressgateway-service-account"" not found
+     - Pods eventually created and are Running.
+   - Impact:
+     - Indicates the install briefly relied on defaults; RBAC or SA provisioning may be incomplete or applied out-of-order.
+   - Recommendation:
+     - Ensure gateway and control-plane Deployments reference their intended ServiceAccounts and RBAC are present. Avoid default SA for gateways.
+
+3) Broad host matching in VirtualService
+   - Evidence:
+     - bookinfo VirtualService hosts [""*""].
+   - Impact:
+     - Accepts traffic for any host header routed through the selected gateway; this is overly permissive in most environments.
+   - Recommendation:
+     - Restrict hosts to expected FQDN(s). If using OpenShift Routes or external LB, align hostnames accordingly.
+
+4) Mesh implementation is upstream Istio, not OpenShift Service Mesh (if OSSM was intended)
+   - Evidence:
+     - No ServiceMeshControlPlane/MemberRoll resources detected; components deployed via Helm labels; versions align with upstream Istio.
+   - Impact:
+     - You won’t get OSSM operator lifecycle, SMCP-driven config, or OpenShift-native integrations.
+   - Recommendation:
+     - If OSSM is desired, plan a migration to ServiceMeshControlPlane and ServiceMeshMember[Roll]. If upstream Istio is intentional, note this deviation.
+
+Next steps
+- Decide on one ingress gateway strategy:
+  - Preferred: keep istio-system/istio-ingressgateway and delete bookinfo/istio-ingressgateway Deployment and Service; update Gateway references if needed.
+  - If keeping a namespace-scoped gateway, create and bind a dedicated ServiceAccount and tighten RBAC; document which Gateway/VirtualService objects target which gateway Service.
+- Tighten routing:
+  - Update VirtualService bookinfo/bookinfo to use explicit hostnames.
+  - Add DestinationRules as needed (e.g., for subset-based routing reviews v1/v2/v3).
+- RBAC/SA hygiene:
+  - Ensure istiod and gateways use their intended ServiceAccounts; reapply manifests if necessary.
+- Review namespace-wide injection:
+  - If sidecar injection in default is not desired, remove istio-injection=enabled from the default namespace.
+
+If you want, I can validate traffic flow through the intended gateway and check sidecar-proxy connectivity/mTLS policy in more depth.","[[{""tool_name"": ""namespaces_list"", ""arguments"": {}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""maistra.io/v2"", ""kind"": ""ServiceMeshControlPlane""}}], [{""tool_name"": ""pods_list_in_namespace"", ""arguments"": {""namespace"": ""istio-system""}}], [{""tool_name"": ""pods_list_in_namespace"", ""arguments"": {""namespace"": ""bookinfo""}}], [{""tool_name"": ""events_list"", ""arguments"": {""namespace"": ""istio-system""}}], [{""tool_name"": ""pods_list_in_namespace"", ""arguments"": {""namespace"": ""default""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""networking.istio.io/v1beta1"", ""kind"": ""VirtualService"", ""namespace"": ""bookinfo""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""networking.istio.io/v1beta1"", ""kind"": ""Gateway"", ""namespace"": ""bookinfo""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""networking.istio.io/v1beta1"", ""kind"": ""DestinationRule"", ""namespace"": ""bookinfo""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""security.istio.io/v1beta1"", ""kind"": ""PeerAuthentication""}}], [{""tool_name"": ""pods_get"", ""arguments"": {""name"": ""istio-ingressgateway-6d65dbb4f5-tq5rs"", ""namespace"": ""bookinfo""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""apps/v1"", ""kind"": ""Deployment"", ""namespace"": ""bookinfo"", ""labelSelector"": ""istio=ingressgateway""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""apps/v1"", ""kind"": ""Deployment"", ""namespace"": ""bookinfo""}}], [{""tool_name"": ""resources_list"", ""arguments"": {""apiVersion"": ""v1"", ""kind"": ""Service"", ""namespace"": ""bookinfo""}}]]",,60.29378955199991

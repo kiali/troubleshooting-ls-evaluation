@@ -1,6 +1,6 @@
 # Evaluation Results
 
-**Latest run:** 2026-06-10 13:43:18 &nbsp;|&nbsp; **Conversations:** 4 &nbsp;|&nbsp; **Models tested:** 3
+**Latest run:** 2026-06-11 10:10:29 &nbsp;|&nbsp; **Conversations:** 4 &nbsp;|&nbsp; **Models tested:** 3
 
 ---
 
@@ -38,7 +38,7 @@
 ### `check_mesh_status` — Single-turn health check: agent reports the overall mesh and service health.
 
 - [✅ `gemini-2.5-pro` — 100% (3/3)](results/google/check_mesh_status_gemini-2.5-pro.md) — 2026-06-10 13:25:24
-- [✅ `gpt-5` — 100% (3/3)](results/openai/check_mesh_status_gpt-5.md) — 2026-06-10 13:23:22
+- [✅ `gpt-5` — 100% (3/3)](results/openai/check_mesh_status_gpt-5.md) — 2026-06-11 10:10:29
 - [❌ `gpt-5.4-mini` — 67% (2/3)](results/openai/check_mesh_status_gpt-5.4-mini.md) — 2026-06-09 16:08:54
 
 ### `fix_bookinfo_fault_injection` — Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.

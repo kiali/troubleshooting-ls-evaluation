@@ -265,12 +265,8 @@ jobs:
           # Verify deps are installed
           venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
 
-      # ── 9. Extract Kiali RAG vector DB + embeddings model ────────────────────
-      # get-embeddings-model is a prerequisite of setup-vector-db
-      - name: Setup vector DB
-        run: make setup-vector-db
 
-      # ── 10. Start MCP server (background) ─────────────────────────────────────
+      # ── 9. Start MCP server (background) ─────────────────────────────────────
       - name: Start Kubernetes MCP server
         run: |
           make run-mcp KIALI_ENDPOINT="http://localhost:20001/kiali" &
@@ -297,8 +293,7 @@ jobs:
             || echo "⚠ MCP /stats not available (non-fatal — MCP is listening on port 8089)"
 
       # ── 11. Start OLS service from source ────────────────────────────────────
-      # Running from source avoids Docker networking issues (host.containers.internal)
-      # and the Podman dependency for vector DB extraction.
+      # Running from source avoids Docker networking issues (host.containers.internal)      
       # The MCP server is on localhost:8089, which OLS can reach directly.
       - name: Start OLS service
         env:
@@ -336,8 +331,6 @@ jobs:
           # Patch olsconfig: networking + absolute paths for large data dirs
           sed -i \
             -e "s|host.containers.internal|localhost|g" \
-            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
-            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
             /tmp/olsconfig-ci.yaml
 
           echo "--- patched olsconfig ($PROVIDER) ---"

@@ -23,7 +23,6 @@ flowchart LR
     ISTIO["Istio mesh"]
     KIALI["Kiali"]
     MCP["MCP Server :8089"]
-    RAG["Kiali RAG Vector DB"]
     OLS["OLS Service :8080"]
     EVAL["lightspeed-eval"]
     JUDGE["Judge LLM"]
@@ -32,7 +31,6 @@ flowchart LR
     ISTIO --- KIALI
     KIALI -->|REST API| MCP
     MCP -->|tools| OLS
-    RAG -->|index| OLS
     OLS -->|tool calls| MCP
     EVAL -->|query| OLS
     EVAL -->|score| JUDGE
@@ -41,7 +39,6 @@ flowchart LR
 | Component | Role |
 |---|---|
 | **Kubernetes MCP Server** | Exposes Kiali observability tools via MCP protocol so OLS can query the mesh |
-| **Kiali RAG Vector DB** | Provides grounded Kiali/Istio documentation as embeddings for OLS responses |
 | **OpenShift Lightspeed (OLS)** | The AI troubleshooting agent under evaluation |
 | **lightspeed-evaluation** | Sends scenario queries to OLS and scores responses with the judge LLM |
 | **Judge LLM** | Independent model (Claude Opus / Gemini) that scores agent correctness |
@@ -67,7 +64,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for the full credential setup guide.
 # 1. Set up credentials (see DEVELOPMENT.md §2)
 
 # 2. Install the evaluation framework
-make setup && make setup-vector-db
+make setup
 
 # 3. Terminal 1 — MCP server
 make run-mcp
@@ -93,7 +90,6 @@ make generate-results
 | Target | Description |
 |--------|-------------|
 | `make setup` | Create `venv/` and install the evaluation framework |
-| `make setup-vector-db` | Extract the Kiali RAG index from the BYOK image |
 | `make setup-dashboard` | Clone and install the web dashboard |
 | `make check-provider` | Show active provider, OLS config, and system config |
 
@@ -138,7 +134,6 @@ See **[OSSM.md](OSSM.md)** for the full guide.
 | `OLS_IMAGE` | `quay.io/openshift-lightspeed/lightspeed-service-api:latest` | OLS image |
 | `WAIT_SECONDS` | `200` | Seconds to wait after setup/cleanup for metrics |
 | `OLS_ENV` | `false` | Set to `true` for OSSM dashboard paths (`ossm/conversations.yaml`, `ossm/results/`) |
-| `KIALI_RAG_DB` | `quay.io/kiali/kiali-byok:latest` | BYOK image for vector DB |
 
 ---
 
@@ -169,7 +164,6 @@ See **[OSSM.md](OSSM.md)** for the full guide.
 ├── scripts/
 │   ├── generate_results.py           # RESULTS.md generator
 │   └── generate_ossm_results.py      # RESULTS_OSSM.md generator
-├── vector_db/                        # git-ignored — from make setup-vector-db
 ├── dashboard/                        # git-ignored — from make setup-dashboard
 └── results/                          # evaluation output
     ├── <conv>_<model>.md             # committed per-run detail pages

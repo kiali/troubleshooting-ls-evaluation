@@ -21,10 +21,8 @@ ossm/results/no-mcp/
 # Dashboard staging area
 dashboard_results/
 
-# Vector database (extracted from kiali-byok image via make setup-vector-db)
+# Vector database and embedding model (git-ignored large data directories)
 vector_db/
-
-# Embedding model (downloaded via make get-embeddings-model)
 embeddings_model/
 
 # Pip temp files

@@ -9,7 +9,7 @@
 # Add a new conversation there, then optionally add an individual target below.
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: all test-without-mcp generate-ossm-results \
+.PHONY: all test test-without-mcp generate-ossm-results \
         check_mesh_status-test check_mesh_status-test-without-mcp \
         fix_bookinfo_routing-test fix_bookinfo_fault_injection-test \
         troubleshoot_latency_trace-test
@@ -38,8 +38,8 @@ OSSM_EVAL_BASE = OPENAI_API_KEY=$${OPENAI_API_KEY:-$$(cat "$(OPENAI_KEY_FILE)")}
 generate-ossm-results: check-venv
 	venv/bin/python scripts/generate_ossm_results.py
 
-# ── all: run every conversation in conversations.yaml ─────────────────────────
-all: check-venv check-openai-key check-services check-bookinfo \
+# ── all / test: run every conversation in conversations.yaml ──────────────────
+all test: check-venv check-openai-key check-services check-bookinfo \
 	fix_bookinfo_routing-test \
 	fix_bookinfo_fault_injection-test \
 	troubleshoot_latency_trace-test \

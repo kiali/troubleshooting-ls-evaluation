@@ -35,7 +35,7 @@ Same cluster and credential requirements as the main evaluation:
 4. Evaluation framework installed:
 
 ```bash
-make setup && make setup-vector-db
+make setup
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the full setup guide.

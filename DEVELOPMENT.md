@@ -118,24 +118,7 @@ the framework is updated).
 
 ---
 
-## 4. Kiali RAG vector database
-
-OLS uses a Kiali knowledge base to improve response quality:
-
-```bash
-make setup-vector-db
-```
-
-Extracts the index from `quay.io/kiali/kiali-byok:latest` into `vector_db/kiali/`.
-Only needed once — re-run after a new release:
-
-```bash
-rm -rf vector_db/kiali && make setup-vector-db
-```
-
----
-
-## 5. Running the services (three terminals)
+## 4. Running the services (three terminals)
 
 ### Terminal 1 — Kubernetes MCP server
 
@@ -147,7 +130,7 @@ make run-mcp KIALI_ENDPOINT=https://kiali-istio-system.apps-crc.testing/
 
 Starts on port **8089** with the `kiali` toolset enabled.
 
-### Terminal 2 — OLS LightSpeed service
+### Terminal 2 — OLS LightSpeed service (port 8080)
 
 ```bash
 # Default provider (openai):
@@ -165,7 +148,7 @@ Starts on port **8080**. Key files are mounted conditionally (skipped if missing
 | `~/.gemini/google_api_key.txt` | `/app-root/google_api_key.txt` | Gemini endpoint |
 | `~/.gcp/gcp_credentials.txt` | `/app-root/gcp_credentials.txt` | google provider (Vertex AI) |
 
-### Terminal 3 — Run evaluations
+### Terminal 3 — Run evaluations (port 8080 must be up)
 
 ```bash
 # Run all scenarios (default provider: openai)
@@ -185,7 +168,7 @@ make check-provider PROVIDER=google
 
 ---
 
-## 6. Generating the report
+## 5. Generating the report
 
 ```bash
 make generate-results            # openai results
@@ -196,7 +179,7 @@ Writes `RESULTS.md` (summary) and `results/<provider>/<name>.md` (per-scenario d
 
 ---
 
-## 7. Provider reference
+## 6. Provider reference
 
 ```
 PROVIDER=openai  (default)
@@ -212,7 +195,7 @@ PROVIDER=google
 
 ---
 
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -225,4 +208,3 @@ PROVIDER=google
 | `JSONDecodeError: Expecting value` (google) | `~/.gcp/gcp_credentials.txt` is empty or not valid JSON |
 | `LLM Provider NOT provided … google_vertex` | `system_google.yaml` `llm.provider` must be `"vertex"` not `"google_vertex"` |
 | All evaluations ERROR, 0 tokens | Judge LLM credentials missing or expired |
-| `SKIP vector_db/kiali already exists` | `rm -rf vector_db/kiali && make setup-vector-db` |

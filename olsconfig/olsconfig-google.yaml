@@ -38,11 +38,6 @@ ols_config:
   default_model: gemini-2.5-pro
   authentication_config:
     module: "noop-with-token"
-  reference_content:
-    embeddings_model_path: ./embeddings_model
-    indexes:
-    - product_docs_index_path: ./vector_db/kiali
-      product_docs_index_id: kiali-istio-docs
   user_data_collection:
     feedback_disabled: true
     transcripts_disabled: true

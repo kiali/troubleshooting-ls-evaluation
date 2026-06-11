@@ -40,8 +40,6 @@ DEFAULT_OSSM_MCP_CONFIG_FILE = mcp_config_ossm.toml
 MCP_CONFIG        ?= mcp_config/$(DEFAULT_KUBERNETES_MCP_CONFIG_FILE)
 
 OLS_IMAGE         ?= quay.io/openshift-lightspeed/lightspeed-service-api:latest
-KIALI_RAG_VERSION ?= latest
-KIALI_RAG_DB      ?= quay.io/kiali/kiali-byok:$(KIALI_RAG_VERSION)
 LSE_TAG           ?= main       # lightspeed-evaluation tag/branch for the dashboard
 LSE_REPO          = https://github.com/lightspeed-core/lightspeed-evaluation.git
 
@@ -90,9 +88,7 @@ endif
 include scenarios/scenarios.mk
 include ossm/ossm_scenarios.mk
 
-EMBEDDING_MODEL ?= sentence-transformers/all-mpnet-base-v2
-
-.PHONY: setup setup-vector-db get-embeddings-model setup-dashboard run-dashboard run-ols run-mcp \
+.PHONY: setup setup-dashboard run-dashboard run-ols run-mcp \
         check-venv check-openai-key check-services check-services-ols check-bookinfo check-provider
 
 # ── Provider info + validation ────────────────────────────────────────────────
@@ -206,38 +202,9 @@ run-dashboard: check-venv
 	  API_KEY=$(_KIALI_TOKEN) \
 	  npx vite
 
-## get-embeddings-model: Download the sentence-transformers embedding model to ./embeddings_model
-get-embeddings-model: check-venv
-	@if [ -d embeddings_model ] && [ -n "$$(ls -A embeddings_model 2>/dev/null)" ]; then \
-	  printf '\033[0;33mSKIP\033[0m embeddings_model/ already exists. Remove it to re-download: rm -rf embeddings_model\n'; \
-	else \
-	  printf 'Installing sentence-transformers (CPU-only torch)...\n'; \
-	  venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu --quiet; \
-	  venv/bin/pip install sentence-transformers --quiet; \
-	  printf 'Downloading embedding model: %s\n' "$(EMBEDDING_MODEL)"; \
-	  venv/bin/python -c "\
-from sentence_transformers import SentenceTransformer; \
-print('Downloading $(EMBEDDING_MODEL) ...'); \
-SentenceTransformer('$(EMBEDDING_MODEL)').save('./embeddings_model'); \
-print('Saved to ./embeddings_model')"; \
-	  printf '\033[0;32m✓\033[0m Embedding model saved to embeddings_model/\n'; \
-	fi
-
-setup-vector-db: get-embeddings-model
-	@if [ -d vector_db/kiali ] && [ -n "$$(ls -A vector_db/kiali 2>/dev/null)" ]; then \
-	  printf '\033[0;33mSKIP\033[0m vector_db/kiali already exists. Remove it to re-extract: rm -rf vector_db/kiali\n'; \
-	else \
-	  mkdir -p vector_db; \
-	  podman create --replace --name tmp-kiali-byok $(KIALI_RAG_DB) true; \
-	  podman cp tmp-kiali-byok:/rag/vector_db/kiali vector_db/kiali || \
-	    (podman rm -f tmp-kiali-byok; exit 1); \
-	  podman rm -f tmp-kiali-byok; \
-	  printf '\033[0;32m✓\033[0m Vector DB extracted to vector_db/kiali\n'; \
-	fi
-
 # ── Services ───────────────────────────────────────────────────────────────────
 
-run-ols: check-provider setup-vector-db
+run-ols: check-provider
 	@openai_mount=""; gemini_mount=""; gcp_mount=""; \
 	[ -f "$(HOME)/.openai/openai_api_key.txt" ] && \
 	  openai_mount="-v $(HOME)/.openai/openai_api_key.txt:/app-root/openai_api_key.txt:Z"; \
@@ -247,7 +214,6 @@ run-ols: check-provider setup-vector-db
 	  gcp_mount="-v $(HOME)/.gcp/gcp_credentials.txt:/app-root/gcp_credentials.txt:Z"; \
 	podman run -it --rm \
 	  -v ./olsconfig:/app-root/config:Z \
-	  -v ./vector_db:/app-root/vector_db:Z \
 	  $$openai_mount \
 	  $$gemini_mount \
 	  $$gcp_mount \

@@ -89,9 +89,6 @@ jobs:
           echo "${{ github.workspace }}/venv/bin" >> $GITHUB_PATH
           venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
 
-      - name: Setup vector DB
-        run: make setup-vector-db
-
       - name: Start Kubernetes MCP server (with Kiali toolset)
         run: |
           make run-mcp \
@@ -123,8 +120,6 @@ jobs:
           cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
           sed -i \
             -e "s|host.containers.internal|localhost|g" \
-            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
-            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
             /tmp/olsconfig-ci.yaml
 
           cd "$WS"
@@ -222,9 +217,6 @@ jobs:
           echo "${{ github.workspace }}/venv/bin" >> $GITHUB_PATH
           venv/bin/python -c "import yaml; import lightspeed_evaluation; print('✓ venv OK')"
 
-      - name: Setup vector DB
-        run: make setup-vector-db
-
       - name: Start Kubernetes MCP server (without Kiali toolset)
         run: |
           make run-mcp \
@@ -256,8 +248,6 @@ jobs:
           cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
           sed -i \
             -e "s|host.containers.internal|localhost|g" \
-            -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
-            -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
             /tmp/olsconfig-ci.yaml
 
           cd "$WS"

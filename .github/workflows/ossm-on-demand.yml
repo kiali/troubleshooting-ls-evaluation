@@ -1,8 +1,12 @@
 name: OSSM Evaluation — On Demand
 
 # Triggered manually from the GitHub UI (Actions → Run workflow).
-# Runs OSSM evals in parallel (with MCP + without MCP), then opens a PR with
-# RESULTS_OSSM.md and ossm/results/{mcp,no-mcp}/ committed.
+# Runs OSSM evals in parallel, then opens a PR with RESULTS_OSSM.md committed.
+#
+# Both jobs set up the full stack: kind + Istio + Kiali + Bookinfo + MCP + OLS.
+# The difference is the MCP config (and therefore which tools OLS can call):
+#   • with-kiali-toolset  → mcp_config/mcp_config.toml         (kiali tools enabled)
+#   • without-kiali-tools → mcp_config/mcp_config_ossm.toml    (k8s tools, no Kiali)
 
 on:
   workflow_dispatch:
@@ -88,9 +92,11 @@ jobs:
       - name: Setup vector DB
         run: make setup-vector-db
 
-      - name: Start Kubernetes MCP server
+      - name: Start Kubernetes MCP server (with Kiali toolset)
         run: |
-          make run-mcp KIALI_ENDPOINT="http://localhost:20001/kiali" &
+          make run-mcp \
+            KIALI_ENDPOINT="http://localhost:20001/kiali" \
+            MCP_CONFIG=mcp_config/mcp_config.toml &
           echo "MCP_PID=$!" >> $GITHUB_ENV
           for i in $(seq 1 20); do
             nc -z localhost 8089 && echo "MCP ready" && exit 0
@@ -154,11 +160,14 @@ jobs:
           kill $OLS_PID 2>/dev/null || true
           kill $MCP_PID 2>/dev/null || true
 
-  # ── OSSM without MCP (OLS + RAG only) ───────────────────────────────────────
-  ossm-without-mcp:
-    name: OSSM / openai / without MCP
+  # ── OSSM without Kiali toolset (k8s tools only via mcp_config_ossm.toml) ────
+  ossm-without-kialitoolset:
+    name: OSSM / openai / without Kiali toolset
     runs-on: ubuntu-latest
     env:
+      CLUSTER:          kind
+      KUBECTL:          kubectl
+      KIALI_ENDPOINT:   http://localhost:20001/kiali
       RESULTS_OSSM_DIR: ossm/results/no-mcp
 
     steps:
@@ -167,6 +176,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install kind and kubectl
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Create kind cluster
+        run: make -f build/kiali.mk start-kind
+
+      - name: Setup Istio + Kiali + Bookinfo
+        run: make -f build/kiali.mk setup-kiali
+
+      - name: Set Kiali endpoint
+        run: echo "KIALI_ENDPOINT=http://localhost:20001/kiali" >> $GITHUB_ENV
+
+      - name: Verify Kiali
+        run: |
+          BASE="http://localhost:20001/kiali"
+          for i in $(seq 1 20); do
+            curl -sf "${BASE}/api/status" > /dev/null && break
+            echo "Waiting for Kiali... ($i/20)"
+            sleep 5
+          done
+          curl -sf "${BASE}/api/status" \
+            || { echo "::error::Kiali /api/status not reachable"; exit 1; }
+          echo "✓ Kiali is healthy"
 
       - name: Write credentials
         env:
@@ -186,10 +225,24 @@ jobs:
       - name: Setup vector DB
         run: make setup-vector-db
 
-      - name: Start OLS service (no MCP)
+      - name: Start Kubernetes MCP server (without Kiali toolset)
+        run: |
+          make run-mcp \
+            KIALI_ENDPOINT="http://localhost:20001/kiali" \
+            MCP_CONFIG=mcp_config/mcp_config_ossm.toml &
+          echo "MCP_PID=$!" >> $GITHUB_ENV
+          for i in $(seq 1 20); do
+            nc -z localhost 8089 && echo "MCP ready" && exit 0
+            echo "Waiting for MCP... ($i/20)"
+            sleep 2
+          done
+          echo "::error::MCP server failed to start on port 8089"
+          exit 1
+
+      - name: Start OLS service
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
-          OLS_CONFIG_SRC: olsconfig-openai-no-mcp.yaml
+          OLS_CONFIG_SRC: olsconfig-openai.yaml
         run: |
           git clone --depth 1 https://github.com/openshift/lightspeed-service.git /tmp/ols-src
           pip install uv --quiet
@@ -202,6 +255,7 @@ jobs:
 
           cp ~/.openai/openai_api_key.txt "$OLS_DIR/openai_api_key.txt"
           sed -i \
+            -e "s|host.containers.internal|localhost|g" \
             -e "s|embeddings_model_path: ./embeddings_model|embeddings_model_path: $WS/embeddings_model|g" \
             -e "s|product_docs_index_path: ./vector_db/kiali|product_docs_index_path: $WS/vector_db/kiali|g" \
             /tmp/olsconfig-ci.yaml
@@ -219,9 +273,10 @@ jobs:
           echo "::error::OLS failed to start"
           exit 1
 
-      - name: Run OSSM tests (without MCP)
+      - name: Run OSSM tests (without Kiali toolset)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          API_KEY: ""
         run: |
           make test-without-mcp PROVIDER=openai WAIT_SECONDS=${WAIT_SECONDS} \
             RESULTS_OSSM_DIR=${RESULTS_OSSM_DIR} MCP_ENABLED=false
@@ -234,14 +289,16 @@ jobs:
           path: ossm/results/no-mcp/
           retention-days: 7
 
-      - name: Stop OLS
+      - name: Stop services
         if: always()
-        run: kill $OLS_PID 2>/dev/null || true
+        run: |
+          kill $OLS_PID 2>/dev/null || true
+          kill $MCP_PID 2>/dev/null || true
 
   # ── Publish: merge results, commit, and open PR ─────────────────────────────
   publish-results:
     name: OSSM / publish results PR
-    needs: [ossm-with-mcp, ossm-without-mcp]
+    needs: [ossm-with-mcp, ossm-without-kialitoolset]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -275,8 +332,8 @@ jobs:
 
       - name: Commit and push results
         env:
-          MCP_RESULT: ${{ needs.ossm-with-mcp.result }}
-          NOMCP_RESULT: ${{ needs.ossm-without-mcp.result }}
+          MCP_RESULT:   ${{ needs.ossm-with-mcp.result }}
+          NOMCP_RESULT: ${{ needs.ossm-without-kialitoolset.result }}
         run: |
           git config user.email 'kiali-dev@googlegroups.com'
           git config user.name  'kiali-bot'
@@ -293,7 +350,7 @@ jobs:
             echo "Nothing to commit — skipping push"
             echo "BRANCH_PUSHED=false" >> $GITHUB_ENV
           else
-            git commit -m "results: OSSM openai with-MCP=${MCP_RESULT} without-MCP=${NOMCP_RESULT} (run ${{ github.run_id }})"
+            git commit -m "results: OSSM openai kiali=${MCP_RESULT} no-kiali-toolset=${NOMCP_RESULT} (run ${{ github.run_id }})"
             git push -f -u origin "$BRANCH"
             echo "BRANCH_PUSHED=true" >> $GITHUB_ENV
           fi
@@ -303,8 +360,8 @@ jobs:
         if: env.BRANCH_PUSHED == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MCP_RESULT: ${{ needs.ossm-with-mcp.result }}
-          NOMCP_RESULT: ${{ needs.ossm-without-mcp.result }}
+          MCP_RESULT:   ${{ needs.ossm-with-mcp.result }}
+          NOMCP_RESULT: ${{ needs.ossm-without-kialitoolset.result }}
         run: |
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -314,8 +371,8 @@ jobs:
             "| | |" \
             "|---|---|" \
             "| **Provider** | \`openai\` |" \
-            "| **With MCP** | \`${MCP_RESULT}\` |" \
-            "| **Without MCP** | \`${NOMCP_RESULT}\` |" \
+            "| **With Kiali toolset** | \`${MCP_RESULT}\` |" \
+            "| **Without Kiali toolset** | \`${NOMCP_RESULT}\` |" \
             "| **Wait seconds** | \`${{ inputs.wait_seconds }}\` |" \
             "| **Run** | [${{ github.run_id }}](${RUN_URL}) |" \
             "" \
@@ -336,13 +393,13 @@ jobs:
       - name: Summarize job outcomes
         run: |
           MCP="${{ needs.ossm-with-mcp.result }}"
-          NOMCP="${{ needs.ossm-without-mcp.result }}"
+          NOMCP="${{ needs.ossm-without-kialitoolset.result }}"
           echo "## OSSM on-demand evaluation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Variant | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| with MCP | ${MCP} |" >> $GITHUB_STEP_SUMMARY
-          echo "| without MCP | ${NOMCP} |" >> $GITHUB_STEP_SUMMARY
+          echo "| with Kiali toolset | ${MCP} |" >> $GITHUB_STEP_SUMMARY
+          echo "| without Kiali toolset | ${NOMCP} |" >> $GITHUB_STEP_SUMMARY
           if [ "$MCP" != "success" ] || [ "$NOMCP" != "success" ]; then
             echo "::error::One or more OSSM jobs failed"
             exit 1

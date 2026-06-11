@@ -34,7 +34,11 @@ else
 endif
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-MCP_CONFIG        ?= mcp_config.toml
+
+DEFAULT_KUBERNETES_MCP_CONFIG_FILE = mcp_config.toml
+DEFAULT_OSSM_MCP_CONFIG_FILE = mcp_config_ossm.toml
+MCP_CONFIG        ?= mcp_config/$(DEFAULT_KUBERNETES_MCP_CONFIG_FILE)
+
 OLS_IMAGE         ?= quay.io/openshift-lightspeed/lightspeed-service-api:latest
 KIALI_RAG_VERSION ?= latest
 KIALI_RAG_DB      ?= quay.io/kiali/kiali-byok:$(KIALI_RAG_VERSION)

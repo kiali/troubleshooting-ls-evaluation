@@ -21,14 +21,10 @@
         in the 'bookinfo' namespace. Can you investigate and tell me what you find?
         Please only report for now, do not make any changes yet.
       expected_response: >
-        The agent should investigate the Bookinfo routing and identify that the
-        reviews VirtualService in the bookinfo namespace has a weight of 0 for
-        reviews-v3, meaning reviews-v3 is intentionally excluded from receiving
-        traffic by the Istio routing rules. The agent may observe that the traffic
-        graph shows some recent traffic to reviews-v3 (due to the metrics window)
-        but should ultimately point to the VirtualService configuration as the
-        source of the routing problem. The agent should report that reviews-v1 and
-        reviews-v2 receive traffic while reviews-v3 is configured to receive none.
+        The agent should identify that the reviews VirtualService routes traffic
+        only to v1 and v2, with v3 (the version that renders red stars) absent from
+        the routing rules and therefore receiving no traffic. The agent should confirm
+        that no changes have been made and offer to update the routing to include v3.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -38,13 +34,11 @@
         What is the exact root cause? Can you check the Istio routing configuration
         for the reviews service in the bookinfo namespace?
       expected_response: >
-        The root cause is the reviews VirtualService in the bookinfo namespace:
-        it explicitly sets the weight for reviews-v3 to 0 (or omits it entirely,
-        which defaults to 0), routing all traffic to reviews-v1 and reviews-v2.
-        Because reviews-v3 is the only version that renders red stars, it never
-        serves requests and users never see red stars. The agent should clearly
-        identify the VirtualService routing weights as the root cause — not any
-        issue with the ratings service, missing deployments, or mTLS configuration.
+        The root cause is the reviews VirtualService in the bookinfo namespace.
+        It routes traffic 50% to v1 and 50% to v2, with v3 present as a destination
+        but missing a weight field (defaults to 0). The agent should cite the relevant
+        section of the VirtualService spec showing the weight distribution and clearly
+        identify the missing weight for v3 as the misconfiguration.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -54,7 +48,9 @@
         Got it. Can you fix the routing so all three versions get equal traffic?
       expected_response: >
         The agent should update the reviews VirtualService to distribute traffic
-        equally across all three versions, setting each weight to approximately 33%.
+        equally across all three versions (~33% each) and confirm the change was
+        applied. It may ask for user confirmation before patching. After the fix,
+        it should note that black, red, and no-star reviews will all now be visible.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -148,7 +144,7 @@
     - deepeval:conversation_completeness
 
   turns:
-    - turn_id: investigate
+    - turn_id: diagnose
       query: >
         Some users are seeing errors on the Bookinfo product page — it looks like
         the ratings service is broken. All pods are running and mTLS / auth policies
@@ -156,24 +152,11 @@
         Can you check the Istio VirtualService routing rules
         for the ratings service and find what's causing the problem?
       expected_response: >
-        The agent should investigate the Bookinfo application and report that the
-        ratings service is returning errors (HTTP 503). It should identify symptoms
-        such as failed requests from the reviews service to ratings, error rates
-        visible in the traffic graph, or error messages in pod logs.
-      turn_metrics:
-        - custom:answer_correctness
-        - custom:keywords_eval
-
-    - turn_id: root_cause
-      query: >
-        Can you identify the specific root cause?
-      expected_response: >
-        The root cause is a fault injection rule in the ratings VirtualService that
-        aborts 100% of requests with HTTP 503. The ratings VirtualService in the
-        bookinfo namespace contains a fault.abort block configured with httpStatus 503
-        and percentage value 100. The agent may explore other potential causes before
-        arriving at this conclusion. What matters is that the final diagnosis correctly
-        identifies the fault.abort configuration in the ratings VirtualService.
+        The agent should find and cite the specific ratings VirtualService spec
+        showing a fault.abort block with httpStatus 503 and percentage value 100.
+        It should identify this as the root cause of the errors on the product page,
+        and may note that this rule is typically used for chaos/resilience testing.
+        The agent should offer to remove the fault injection rule to resolve the issue.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -182,9 +165,10 @@
       query: >
         Please fix it.
       expected_response: >
-        The agent should remove the fault injection rule from the ratings VirtualService,
-        either by patching it to remove the fault.abort block or by deleting the
-        VirtualService if it was created solely for the fault injection.
+        The agent should remove the fault injection rule from the ratings VirtualService
+        and confirm that the service is now operating correctly. It may ask for
+        confirmation before applying the change, and should report success once the
+        fault.abort block has been patched out or the VirtualService deleted.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -208,10 +192,12 @@
         are taking several seconds. All pods are running fine. Can you investigate
         what is causing the latency and tell me which service is responsible?
       expected_response: >
-        The agent should investigate and identify that the ratings service is
-        causing significant latency. It should find evidence such as high response
-        times visible in the traffic graph, traces showing slow spans on the ratings
-        service, or metrics indicating elevated latency for ratings.
+        The agent should identify that the ratings VirtualService has a fault
+        injection rule introducing a fixed delay (e.g. 7 seconds) on 100% of
+        requests. It should attribute the slow product page load to this intentional
+        delay configuration and name the ratings service as the responsible component.
+        The agent may note that this type of fault injection is typically used for
+        resilience testing.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
@@ -222,11 +208,15 @@
         bookinfo namespace — especially for the ratings service — to pinpoint
         exactly where the 3-second delay is introduced?
       expected_response: >
-        The agent should query distributed traces for the bookinfo namespace
-        and identify that the ratings service has traces with spans showing
-        a fixed delay of approximately 3 seconds. The root cause is a fault
-        injection delay rule in the ratings VirtualService configured with
-        fixedDelay of 3 seconds on 100% of requests.
+        The agent should query distributed traces for the ratings service in the
+        bookinfo namespace and report what the traces show. The agent may find
+        either: (a) traces with spans confirming the fixed delay (if the fault is
+        still active), or (b) traces showing fast response times (e.g. ~30ms) if
+        recent traffic has not been affected. In the latter case, the agent should
+        reconcile the trace data with the fault injection rule found in the
+        VirtualService configuration and note that the delay may no longer be
+        actively triggering — while still identifying the VirtualService fault
+        injection as the configured root cause.
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval

@@ -2,9 +2,13 @@ name: OSSM — Pull Request
 
 # Runs OSSM evals on PRs that touch ossm/** when the PR author is a repo
 # collaborator with write access (admin / maintain / write).
+#
+# Uses pull_request_target (not pull_request) so that secrets are available
+# even for PRs opened from forks. The gate job ensures only collaborators
+# with write access can trigger the evaluation jobs.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
     paths:
       - 'ossm/**'
@@ -61,7 +65,10 @@ jobs:
       RESULTS_OSSM_DIR: ossm/results/mcp
 
     steps:
+      # Checkout the PR branch (pull_request_target defaults to base branch)
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -104,7 +111,7 @@ jobs:
           mkdir -p ~/.openai ~/.gemini ~/.gcp
           printf '%s' "$_OPENAI_KEY" > ~/.openai/openai_api_key.txt
           [ -s ~/.openai/openai_api_key.txt ] \
-            || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
+            || { echo "::error::OPENAI_KEY secret is empty or not set. Add it at: Settings → Secrets and variables → Actions"; exit 1; }
 
       - name: Install evaluation framework
         run: |
@@ -203,7 +210,10 @@ jobs:
       RESULTS_OSSM_DIR: ossm/results/no-mcp
 
     steps:
+      # Checkout the PR branch (pull_request_target defaults to base branch)
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -246,7 +256,7 @@ jobs:
           mkdir -p ~/.openai
           printf '%s' "$_OPENAI_KEY" > ~/.openai/openai_api_key.txt
           [ -s ~/.openai/openai_api_key.txt ] \
-            || { echo "::error::OPENAI_KEY secret is empty or not set"; exit 1; }
+            || { echo "::error::OPENAI_KEY secret is empty or not set. Add it at: Settings → Secrets and variables → Actions"; exit 1; }
 
       - name: Install evaluation framework
         run: |
@@ -342,6 +352,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-python@v5
         with:

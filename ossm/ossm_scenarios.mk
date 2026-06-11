@@ -9,8 +9,10 @@
 # Add a new conversation there, then optionally add an individual target below.
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-without-mcp check_mesh_status-test generate-ossm-results \
-        check_mesh_status-test-without-mcp
+.PHONY: all test-without-mcp generate-ossm-results \
+        check_mesh_status-test check_mesh_status-test-without-mcp \
+        fix_bookinfo_routing-test fix_bookinfo_fault_injection-test \
+        troubleshoot_latency_trace-test
 
 OSSM_CONVERSATIONS = ossm/conversations.yaml
 
@@ -37,12 +39,28 @@ generate-ossm-results: check-venv
 	venv/bin/python scripts/generate_ossm_results.py
 
 # ── all: run every conversation in conversations.yaml ─────────────────────────
-test: check-venv check-openai-key check-services check-bookinfo \
+all: check-venv check-openai-key check-services check-bookinfo \
+	fix_bookinfo_routing-test \
+	fix_bookinfo_fault_injection-test \
+	troubleshoot_latency_trace-test \
 	check_mesh_status-test
 
 test-without-mcp: check-venv check-openai-key check-services-ols \
 	check_mesh_status-test-without-mcp
+
 # ── Individual conversation targets ───────────────────────────────────────────
+
+fix_bookinfo_routing-test: check-venv check-openai-key check-services check-bookinfo
+	$(OSSM_EVAL_BASE) \
+	  --tag fix_bookinfo_routing
+
+fix_bookinfo_fault_injection-test: check-venv check-openai-key check-services check-bookinfo
+	$(OSSM_EVAL_BASE) \
+	  --tag fault_injection_bookinfo
+
+troubleshoot_latency_trace-test: check-venv check-openai-key check-services check-bookinfo
+	$(OSSM_EVAL_BASE) \
+	  --tag troubleshoot_latency_trace
 
 check_mesh_status-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
@@ -50,4 +68,4 @@ check_mesh_status-test: check-venv check-openai-key check-services check-bookinf
 
 check_mesh_status-test-without-mcp: check-venv check-openai-key check-services-ols
 	$(OSSM_EVAL_BASE) \
-	  --tag no_kiali 
+	  --tag no_kiali

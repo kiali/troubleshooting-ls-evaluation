@@ -55,6 +55,9 @@
         - custom:answer_correctness
         - custom:keywords_eval
 
+  setup_script: ../scenarios/fix_bookinfo_routing/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_routing/cleanup.sh
+
 
 # ── check_mesh_status ─────────────────────────────────────────────────────────
 - conversation_group_id: check_mesh_status
@@ -173,6 +176,9 @@
         - custom:answer_correctness
         - custom:keywords_eval
 
+  setup_script: ../scenarios/fix_bookinfo_fault_injection/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
+
 
 # ── troubleshoot_latency_trace ────────────────────────────────────────────────
 - conversation_group_id: troubleshoot_latency_trace
@@ -231,3 +237,6 @@
       turn_metrics:
         - custom:answer_correctness
         - custom:keywords_eval
+
+  setup_script: ../scenarios/troubleshoot_latency_trace/setup.sh
+  cleanup_script: ../scenarios/troubleshoot_latency_trace/cleanup.sh

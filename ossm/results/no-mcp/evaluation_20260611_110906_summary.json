@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-06-11T11:09:06.266284+00:00",
+  "total_evaluations": 1,
+  "summary_stats": {
+    "overall": {
+      "TOTAL": 1,
+      "PASS": 0,
+      "FAIL": 1,
+      "ERROR": 0,
+      "SKIPPED": 0,
+      "pass_rate": 0.0,
+      "fail_rate": 100.0,
+      "error_rate": 0.0,
+      "skipped_rate": 0.0,
+      "total_judge_llm_input_tokens": 1388,
+      "total_judge_llm_output_tokens": 339,
+      "total_judge_llm_tokens": 1727,
+      "total_embedding_tokens": 0,
+      "total_api_input_tokens": 72698,
+      "total_api_output_tokens": 966,
+      "total_api_tokens": 73664,
+      "total_tokens": 75391
+    },
+    "by_metric": {
+      "custom:answer_correctness": {
+        "pass": 0,
+        "fail": 1,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 0.42,
+          "median": 0.42,
+          "std": 0.0,
+          "min": 0.42,
+          "max": 0.42,
+          "confidence_interval": null
+        }
+      }
+    },
+    "by_conversation": {
+      "check_mesh_status_no_kiali": {
+        "pass": 0,
+        "fail": 1,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0
+      }
+    },
+    "by_tag": {
+      "no_kiali": {
+        "pass": 0,
+        "fail": 1,
+        "error": 0,
+        "skipped": 0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
+        "error_rate": 0.0,
+        "skipped_rate": 0.0,
+        "score_statistics": {
+          "count": 1,
+          "mean": 0.42,
+          "median": 0.42,
+          "std": 0.0,
+          "min": 0.42,
+          "max": 0.42,
+          "confidence_interval": null
+        }
+      }
+    },
+    "agent_latency_stats": {
+      "count": 1,
+      "mean": 39.46457814199999,
+      "median": 39.46457814199999,
+      "std": 0.0,
+      "min": 39.46457814199999,
+      "max": 39.46457814199999,
+      "p95": 39.46457814199999,
+      "p99": 39.46457814199999
+    }
+  },
+  "configuration": {
+    "llm": {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "ssl_verify": true,
+      "ssl_cert_file": null,
+      "temperature": 0.0,
+      "max_tokens": 5000,
+      "timeout": 300,
+      "num_retries": 3,
+      "cache_enabled": true,
+      "parameters": {
+        "temperature": 0.0,
+        "max_completion_tokens": 5000
+      }
+    },
+    "embedding": {
+      "provider": "openai",
+      "model": "text-embedding-3-small",
+      "provider_kwargs": null,
+      "cache_enabled": false
+    },
+    "api": {
+      "api_base": "http://0.0.0.0:8080",
+      "version": "v1",
+      "endpoint_type": "query",
+      "timeout": 300,
+      "provider": "openai",
+      "model": "gpt-5",
+      "no_tools": null,
+      "system_prompt": null,
+      "extra_request_params": {
+        "mode": "troubleshooting"
+      },
+      "cache_enabled": false,
+      "num_retries": 3,
+      "enabled": true,
+      "mcp_headers": null
+    }
+  },
+  "results": [
+    {
+      "conversation_group_id": "check_mesh_status_no_kiali",
+      "tag": "no_kiali",
+      "turn_id": "diagnose",
+      "metric_identifier": "custom:answer_correctness",
+      "result": "FAIL",
+      "score": 0.42,
+      "threshold": null,
+      "execution_time": 42.91321319000002,
+      "evaluation_latency": 3.4486350480000283,
+      "judge_llm_input_tokens": 1388,
+      "judge_llm_output_tokens": 339,
+      "judge_scores": [
+        {
+          "judge_id": "primary",
+          "score": 0.42,
+          "reason": "Custom answer correctness: 0.42 - The response has some alignment with the expected structure: it gives a mesh health summary, mentions control plane and data plane status, and identifies a potential issue. However, it is only partially correct and contains several problems:",
+          "judge_input_tokens": 1388,
+          "judge_output_tokens": 339,
+          "embedding_tokens": 0
+        }
+      ],
+      "time_to_first_token": null,
+      "streaming_duration": null,
+      "agent_latency": 39.46457814199999,
+      "tokens_per_second": null
+    }
+  ]
+}

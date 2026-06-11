@@ -1,7 +1,7 @@
 # ✅ check_mesh_status
 
 **OLS model:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`  
-**Run:** 2026-06-11 09:17:45 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
+**Run:** 2026-06-11 11:11:41 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
 
 > Check the status of the mesh and identify any issues.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260611_091745_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260611_111141_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260611_091745_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260611_111141_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260611_091745_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260611_111141_status_breakdown.png)
 
 </details>
 
@@ -28,7 +28,7 @@
 
 | Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |
 |---|---|---|---|---|---|
-| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 0.78 |
+| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 0.92 |
 
 ## Turns
 
@@ -40,7 +40,7 @@
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `████████████░░░░` 0.78 |
+| `custom:answer_correctness` | ✅ PASS | `███████████████░` 0.92 |
 
 <details>
 <summary>Actual tool calls</summary>
@@ -49,6 +49,7 @@
 - `pods_list_in_namespace`(namespace=istio-system, labelSelector=app=grafana)
 - `resources_list`(apiVersion=v1, kind=Service, namespace=istio-system, labelSelector=app=grafana)
 - `events_list`(namespace=istio-system)
+- `resources_get`(apiVersion=apps/v1, kind=Deployment, name=grafana, namespace=istio-system)
 
 </details>
 
@@ -56,29 +57,18 @@
 <summary>Agent response</summary>
 
 ```
-Assessment of Istio mesh
-
-Summary
+Assessment summary
 - Control plane: Healthy
-  - istiod (istio-system/istiod) status Healthy, version 1.28.0
+  - Evidence: istiod in istio-system is Healthy, version 1.28.0.
 - Data plane: Healthy
-  - Monitored namespaces: bookinfo, default
-- Observability: One issue detected
-  - Grafana: Unreachable (Kiali → Grafana connectivity status Unreachable)
-  - Jaeger: Healthy
-  - Prometheus: Healthy
-
-Evidence
-- Mesh status (timestamp 2026-06-11T09:17:26Z):
-  - components.control_plane.status: Healthy
-  - components.data_plane.monitored_namespaces: bookinfo (HEALTHY), default (HEALTHY)
-  - components.observability_stack.grafana: Unreachable; jaeger: Healthy; prometheus: Healthy
-  - connectivity_graph shows: istio-system/kiali → Grafana: Unreachable
-  - critical_alerts: Grafana is Unreachable (impact: Grafana dashboards unavailable)
-- istio-system checks:
-  - No Grafana Pods found in istio-system (label app=grafana) — empty result
-  - No Grafana Service found in istio-system (label app=grafana) — empty result
-  - istio-system events: no Grafana-…
+  - Evidence: Monitored namespaces bookinfo and default report HEALTHY.
+  - Additional mTLS evidence: SPIFFE identities for default namespace service accounts (bookinfo-details, productpage, ratings, reviews) are Available=true in the provided document, indicating certificates are being issued and mounted.
+- Observability: Partial outage
+  - Grafana: Unreachable
+    - Evidence: Mesh status shows Grafana Unreachable and a critical alert “Grafana is Unreachable”. Kiali connectivity graph shows kiali -> Grafana: Unreachable.
+    - Cross-check: No grafana Deployment/Service found in istio-system (deployments.apps "grafana" not found; no pods/services with label app=grafana in istio-system). This suggests either:
+      1) Grafana is deployed elsewhere (e.g., external or another namespace) and its URL in Kiali is misconfigured, or
+      2) Grafana is not deployed…
 ```
 
 </details>
@@ -86,14 +76,15 @@ Evidence
 <details>
 <summary>Expected response</summary>
 
-The agent should provide a structured Istio mesh health assessment grounded in Kiali tool output, typically organized as:
-Summary — report control plane health (istiod in istio-system, version, status), observability stack health (Prometheus, Grafana, Tempo reachability), and data plane / namespace health (e.g. bookinfo overall status, availability, error rate, and any top unhealthy applications).
-Evidence — cite concrete findings from Kiali queries: workloads and services with Healthy vs Failure/Degraded status; traffic graph edges showing healthy vs failing request paths (including mTLS where shown); and relevant application or proxy logs (e.g. repeated 503 errors between services).
-Analysis — when issues exist, identify degraded namespaces, services, or workloads, explain likely root causes with supporting evidence (such as misrouting to non-existent subsets, VirtualService/DestinationRule mismatches, or mTLS policy issues), and list recommended next steps or fixes. When the mesh is healthy, confirm that control plane, observability, and data plane components are healthy.
+The agent should provide a structured Istio mesh health assessment using Kiali's mesh status tool, typically organized as:
+Assessment summary — report control plane health (istiod version and status), data plane health (monitored namespaces and overall status), and observability stack reachability listing each component individually (Prometheus, Jaeger/Tempo, Grafana) with a Healthy or Unreachable status.
+Evidence — cite Kiali mesh status output directly: connection states, trust domain, Istio and Kiali versions. When a component is Unreachable, follow up by checking whether the corresponding pods and services exist (e.g. listing resources by label in the control-plane namespace) to confirm whether it is undeployed or misconfigured.
+Analysis — identify any Unreachable components and state: the likely root cause (e.g. component not deployed vs. misconfigured URL), the impact on mesh operations (e.g. dashboards unavailable while data plane is unaffected), and two remediation paths: restore/deploy the missing component or disable its integration in Kiali config to clear the warning.
+Conclusion — confirm which components are healthy and summarize any remaining action items clearly.
 
 </details>
 
 ---
 
-*Tokens — Judge: 1,059 | API: 11,470 | Total: 12,529*
-*Latency — mean: 18.5s | p95: 18.5s*
+*Tokens — Judge: 1,277 | API: 19,488 | Total: 20,765*
+*Latency — mean: 29.6s | p95: 29.6s*

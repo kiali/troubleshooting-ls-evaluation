@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-12T11:34:11.664058+00:00",
+  "timestamp": "2026-06-12T13:03:52.507688+00:00",
   "total_evaluations": 1,
   "summary_stats": {
     "overall": {
@@ -12,14 +12,14 @@
       "fail_rate": 0.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 1638,
-      "total_judge_llm_output_tokens": 281,
-      "total_judge_llm_tokens": 1919,
+      "total_judge_llm_input_tokens": 833,
+      "total_judge_llm_output_tokens": 279,
+      "total_judge_llm_tokens": 1112,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 135306,
-      "total_api_output_tokens": 1228,
-      "total_api_tokens": 136534,
-      "total_tokens": 138453
+      "total_api_input_tokens": 11838,
+      "total_api_output_tokens": 583,
+      "total_api_tokens": 12421,
+      "total_tokens": 13533
     },
     "by_metric": {
       "custom:answer_correctness": {
@@ -43,7 +43,7 @@
       }
     },
     "by_conversation": {
-      "check_mesh_status_no_kiali": {
+      "check_mesh_status": {
         "pass": 1,
         "fail": 0,
         "error": 0,
@@ -55,7 +55,7 @@
       }
     },
     "by_tag": {
-      "no_kiali": {
+      "check_mesh_Status": {
         "pass": 1,
         "fail": 0,
         "error": 0,
@@ -77,13 +77,13 @@
     },
     "agent_latency_stats": {
       "count": 1,
-      "mean": 59.94014678799999,
-      "median": 59.94014678799999,
+      "mean": 29.642124877000015,
+      "median": 29.642124877000015,
       "std": 0.0,
-      "min": 59.94014678799999,
-      "max": 59.94014678799999,
-      "p95": 59.94014678799999,
-      "p99": 59.94014678799999
+      "min": 29.642124877000015,
+      "max": 29.642124877000015,
+      "p95": 29.642124877000015,
+      "p99": 29.642124877000015
     }
   },
   "configuration": {
@@ -128,30 +128,30 @@
   },
   "results": [
     {
-      "conversation_group_id": "check_mesh_status_no_kiali",
-      "tag": "no_kiali",
+      "conversation_group_id": "check_mesh_status",
+      "tag": "check_mesh_Status",
       "turn_id": "diagnose",
       "metric_identifier": "custom:answer_correctness",
       "result": "PASS",
       "score": 0.78,
       "threshold": null,
-      "execution_time": 63.64737757299997,
-      "evaluation_latency": 3.707230784999979,
-      "judge_llm_input_tokens": 1638,
-      "judge_llm_output_tokens": 281,
+      "execution_time": 32.734985886000004,
+      "evaluation_latency": 3.0928610089999893,
+      "judge_llm_input_tokens": 833,
+      "judge_llm_output_tokens": 279,
       "judge_scores": [
         {
           "judge_id": "primary",
           "score": 0.78,
-          "reason": "Custom answer correctness: 0.78 - The response is largely aligned with the expected behavior: it gives a structured mesh health assessment, separates control plane and data plane, mentions Istiod, ingress/egress gateways, observability components, checks for sidecar injection, and identifies issues with evidence and remediation suggestions.",
-          "judge_input_tokens": 1638,
-          "judge_output_tokens": 281,
+          "reason": "Custom answer correctness: 0.78 - The response is largely correct and well aligned with the expected structure. It provides a clear mesh health assessment with:",
+          "judge_input_tokens": 833,
+          "judge_output_tokens": 279,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 59.94014678799999,
+      "agent_latency": 29.642124877000015,
       "tokens_per_second": null
     }
   ]

@@ -1,6 +1,79 @@
-# Evaluation data for check_mesh_status
+# Evaluation conversations for OSSM + LightSpeed troubleshooting evaluation.
+# Simplified version of scenarios/conversations.yaml — no tool_calls or expected_tool_calls.
 
 
+# ── fix_bookinfo_routing ──────────────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_routing
+  tag: fix_bookinfo_routing
+  description: "Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights."
+
+
+  turns:
+    - turn_id: investigate
+      query: >
+        In our Bookinfo app, the product page only ever shows black or no stars.It never shows red stars.  All Istio resources and services are deployed in the 'bookinfo' namespace. Can you investigate and fix it?
+      expected_response: >
+        The agent should identify that the reviews VirtualService routes traffic
+        only to v1 and v2, with v3 (the version that renders red stars) absent from
+        the routing rules and therefore receiving no traffic. The agent should confirm
+        that no changes have been made and offer to update the routing to include v3.
+      turn_metrics:
+        - custom:answer_correctness
+
+  setup_script: ../scenarios/fix_bookinfo_routing/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_routing/cleanup.sh
+
+
+# ── fix_bookinfo_routing_no_kiali ─────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_routing_no_kiali
+  tag: fix_bookinfo_routing_no_kiali
+  description: "Multi-turn without Kiali: reviews-v3 has weight 0. Agent investigates with kubectl, identifies the routing issue, and fixes weights."
+
+
+  turns:
+    - turn_id: investigate
+      query: >
+        In our Bookinfo app, the product page only ever shows black or no stars —
+        it never shows red stars. All Istio resources and services are deployed
+        in the 'bookinfo' namespace. Can you investigate and tell me what you find?
+        Please only report for now, do not make any changes yet.
+      expected_response: >
+        The agent should inspect the Istio configuration in the bookinfo namespace
+        and identify that the DestinationRule for the reviews service is missing the
+        subset definition for v3. Although the VirtualService may route traffic to v3,
+        Istio cannot forward requests to an undefined subset, so reviews-v3 pods never
+        receive traffic and red stars are never displayed. The agent should confirm no
+        changes have been made.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: diagnose
+      query: >
+        What is the exact root cause? Can you check the Istio routing configuration
+        for the reviews service in the bookinfo namespace?
+      expected_response: >
+        The agent should identify a VirtualService (named bookinfo or reviews) that
+        routes 100% of traffic to reviews-v1, preventing v2 and v3 from receiving
+        any traffic. It should confirm no changes have been made and offer to adjust
+        the routing rules.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Got it. Can you fix the routing so all three versions get equal traffic?
+      expected_response: >
+        The agent should update the reviews VirtualService to distribute traffic
+        equally across all three versions (~33% each) and confirm the change was
+        applied.
+      turn_metrics:
+        - custom:answer_correctness
+
+  setup_script: ../scenarios/fix_bookinfo_routing/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_routing/cleanup.sh
+
+
+# ── check_mesh_status ─────────────────────────────────────────────────────────
 - conversation_group_id: check_mesh_status
   tag: check_mesh_Status
   description: "Check the status of the mesh and identify any issues."
@@ -74,3 +147,131 @@
         is healthy from what needs action.
       turn_metrics:
         - custom:answer_correctness
+
+
+# ── fix_bookinfo_fault_injection ──────────────────────────────────────────────
+- conversation_group_id: fix_bookinfo_fault_injection
+  tag: fault_injection_bookinfo
+  description: "Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it."
+
+
+  turns:
+    - turn_id: diagnose
+      query: >
+        Some users are seeing errors on the Bookinfo product page — it looks like
+        the ratings service is broken. All pods are running and mTLS / auth policies
+        are not the issue. All Istio resources are in the 'bookinfo' namespace.
+        Can you check the Istio VirtualService routing rules
+        for the ratings service and find what's causing the problem?
+      expected_response: >
+        The agent should find and cite the specific ratings VirtualService spec
+        showing a fault.abort block with httpStatus 503 and percentage value 100.
+        It should identify this as the root cause of the errors on the product page,
+        and may note that this rule is typically used for chaos/resilience testing.
+        The agent should offer to remove the fault injection rule to resolve the issue.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Please fix it.
+      expected_response: >
+        The agent should remove the fault injection rule from the ratings VirtualService
+        and confirm that the service is now operating correctly. It may ask for
+        confirmation before applying the change, and should report success once the
+        fault.abort block has been patched out or the VirtualService deleted.
+      turn_metrics:
+        - custom:answer_correctness
+
+  setup_script: ../scenarios/fix_bookinfo_fault_injection/setup.sh
+  cleanup_script: ../scenarios/fix_bookinfo_fault_injection/cleanup.sh
+
+
+
+
+# ── troubleshoot_latency_trace ────────────────────────────────────────────────
+- conversation_group_id: troubleshoot_latency_trace
+  tag: troubleshoot_latency_trace
+  description: "A 3-second delay fault is injected on the ratings service. The agent must identify the latency root cause using traces and fix the delay."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        The Bookinfo product page is loading very slowly — requests to the page
+        are taking several seconds. All pods are running fine. Can you investigate
+        what is causing the latency and tell me which service is responsible?
+      expected_response: >
+        The agent should identify that the ratings VirtualService has a fault
+        injection rule introducing a fixed delay (e.g. 7 seconds) on 100% of
+        requests. It should attribute the slow product page load to this intentional
+        delay configuration and name the ratings service as the responsible component.
+        The agent may note that this type of fault injection is typically used for
+        resilience testing.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: diagnose
+      query: >
+        Based on your findings, can you check the distributed traces for the
+        bookinfo namespace — especially for the ratings service — to pinpoint
+        exactly where the 3-second delay is introduced?
+      expected_response: >
+        The agent should query distributed traces for the ratings service in the
+        bookinfo namespace and report what the traces show. The agent may find
+        either: (a) traces with spans confirming the fixed delay (if the fault is
+        still active), or (b) traces showing fast response times (e.g. ~30ms) if
+        recent traffic has not been affected. In the latter case, the agent should
+        reconcile the trace data with the fault injection rule found in the
+        VirtualService configuration and note that the delay may no longer be
+        actively triggering — while still identifying the VirtualService fault
+        injection as the configured root cause.
+      turn_metrics:
+        - custom:answer_correctness
+
+    - turn_id: fix
+      query: >
+        Please remove the delay so the ratings service responds at normal speed.
+      expected_response: >
+        The agent should remove the delay fault injection rule from the ratings
+        VirtualService, either by patching it to remove the fault.delay block
+        or by deleting the VirtualService entirely.
+      turn_metrics:
+        - custom:answer_correctness
+
+  setup_script: ../scenarios/troubleshoot_latency_trace/setup.sh
+  cleanup_script: ../scenarios/troubleshoot_latency_trace/cleanup.sh
+
+
+# ── troubleshoot_latency_trace_no_kiali ───────────────────────────────────────
+- conversation_group_id: troubleshoot_latency_trace_no_kiali
+  tag: latency_no_kiali
+  description: "Multi-turn without Kiali: 3-second delay on ratings. Agent investigates with kubectl and traces, identifies root cause, and fixes the delay."
+
+  conversation_metrics:
+    - geval:troubleshooting_continuity
+    - deepeval:conversation_relevancy
+    - deepeval:knowledge_retention
+    - deepeval:conversation_completeness
+
+  turns:
+    - turn_id: investigate
+      query: >
+        The Bookinfo product page is loading very slowly — requests to the page
+        are taking several seconds. All pods are running fine. Can you investigate
+        what is causing the latency and tell me which service is responsible?
+      expected_response: >
+        The agent should identify a fault injection rule in the ratings VirtualService
+        that adds a fixed delay (e.g. 7 seconds) to 100% of requests, attributing the
+        slow product page load to this intentional delay configuration. It may note
+        this is typically used for resilience testing and offer to remove the rule.
+      turn_metrics:
+        - custom:answer_correctness
+
+  setup_script: ../scenarios/troubleshoot_latency_trace/setup.sh
+  cleanup_script: ../scenarios/troubleshoot_latency_trace/cleanup.sh

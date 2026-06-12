@@ -1,7 +1,7 @@
 # ✅ fix_bookinfo_fault_injection
 
 **OLS model:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`  
-**Run:** 2026-06-12 11:05:51 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
+**Run:** 2026-06-12 11:49:13 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
 
 > Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260612_110551_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260612_114913_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260612_110551_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260612_114913_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260612_110551_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260612_114913_status_breakdown.png)
 
 </details>
 
@@ -28,7 +28,7 @@
 
 | Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |
 |---|---|---|---|---|---|
-| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 0.98 |
+| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 1.00 |
 
 ## Turns
 
@@ -40,13 +40,14 @@
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `████████████████` 0.98 |
+| `custom:answer_correctness` | ✅ PASS | `████████████████` 1.00 |
 
 <details>
 <summary>Actual tool calls</summary>
 
 - `kiali_manage_istio_config_read`(action=list, namespace=bookinfo, serviceName=ratings)
 - `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=VirtualService, namespace=bookinfo, …)
+- `kiali_manage_istio_config_read`(action=get, group=networking.istio.io, kind=DestinationRule, namespace=bookinfo, …)
 
 </details>
 
@@ -55,27 +56,23 @@
 
 ```
 Diagnosis
+- Evidence
+  - Istio VirtualService bookinfo/ratings contains a fault-injection abort rule at 100%:
+    - spec.http[0].fault.abort.httpStatus: 503
+    - spec.http[0].fault.abort.percentage.value: 100
+    - spec.http[0].route: ratings.bookinfo.svc.cluster.local subset v1 weight 100
+    - Object: networking.istio.io/v1 VirtualService ratings (namespace: bookinfo, created: 2026-06-12T11:42:52Z)
+  - DestinationRule bookinfo/ratings is valid and defines subset v1 correctly:
+    - host: ratings.bookinfo.svc.cluster.local
+    - subsets: [{ name: v1, labels: { version: v1 } }]
 
-Evidence
-- Istio VirtualService bookinfo/ratings currently injects a 100% abort fault:
-  - Resource: VirtualService ratings (networking.istio.io/v1)
-  - Namespace: bookinfo
-  - Spec excerpt:
-    - hosts: ["ratings.bookinfo.svc.cluster.local"]
-    - http[0].fault.abort.httpStatus: 503
-    - http[0].fault.abort.percentage.value: 100
-  - Full path: spec.http[0].fault.abort.httpStatus=503, percentage.value=100
-  - CreationTimestamp: 2026-06-12T10:59:35Z
-  - Referenced DestinationRule: bookinfo/ratings
-
-Root cause
-- The VirtualService for ratings has fault injection enabled at 100%, causing all requests to ratings to be aborted with HTTP 503. This explains product page errors despite pods being healthy and mTLS/auth being fine.
+- Root cause
+  - A deliberate fault-injection rule in the VirtualService forces all requests to ratings to be aborted with HTTP 503 (100% of traffic). This explains users seeing errors on the product page while pods and mTLS/auth are fine.
 
 Fix / Mitigation
-Choose one:
-1) Immediate restore (safe/reversible): remove the fault injection block entirely.
-- Desired VirtualService spec.http should only contain the route, e.g.:
-  - route: [{ destination: { host: ratings.bookinfo.svc.cluster.local, …
+- Remove or disable the fault injection in the VirtualService.
+  - Reversible (safe): set percentage to 0 to quickly stop the aborts.
+  - Preferred: remove…
 ```
 
 </details>
@@ -89,5 +86,5 @@ The agent should find and cite the ratings VirtualService spec showing a fault.a
 
 ---
 
-*Tokens — Judge: 967 | API: 4,556 | Total: 5,523*
-*Latency — mean: 13.5s | p95: 13.5s*
+*Tokens — Judge: 787 | API: 7,370 | Total: 8,157*
+*Latency — mean: 18.9s | p95: 18.9s*

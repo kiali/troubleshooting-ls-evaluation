@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-12T10:50:45.405409+00:00",
+  "timestamp": "2026-06-12T11:34:11.664058+00:00",
   "total_evaluations": 1,
   "summary_stats": {
     "overall": {
@@ -12,14 +12,14 @@
       "fail_rate": 0.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 886,
-      "total_judge_llm_output_tokens": 279,
-      "total_judge_llm_tokens": 1165,
+      "total_judge_llm_input_tokens": 1638,
+      "total_judge_llm_output_tokens": 281,
+      "total_judge_llm_tokens": 1919,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 8290,
-      "total_api_output_tokens": 642,
-      "total_api_tokens": 8932,
-      "total_tokens": 10097
+      "total_api_input_tokens": 135306,
+      "total_api_output_tokens": 1228,
+      "total_api_tokens": 136534,
+      "total_tokens": 138453
     },
     "by_metric": {
       "custom:answer_correctness": {
@@ -33,17 +33,17 @@
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.92,
-          "median": 0.92,
+          "mean": 0.78,
+          "median": 0.78,
           "std": 0.0,
-          "min": 0.92,
-          "max": 0.92,
+          "min": 0.78,
+          "max": 0.78,
           "confidence_interval": null
         }
       }
     },
     "by_conversation": {
-      "check_mesh_status": {
+      "check_mesh_status_no_kiali": {
         "pass": 1,
         "fail": 0,
         "error": 0,
@@ -55,7 +55,7 @@
       }
     },
     "by_tag": {
-      "check_mesh_Status": {
+      "no_kiali": {
         "pass": 1,
         "fail": 0,
         "error": 0,
@@ -66,24 +66,24 @@
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.92,
-          "median": 0.92,
+          "mean": 0.78,
+          "median": 0.78,
           "std": 0.0,
-          "min": 0.92,
-          "max": 0.92,
+          "min": 0.78,
+          "max": 0.78,
           "confidence_interval": null
         }
       }
     },
     "agent_latency_stats": {
       "count": 1,
-      "mean": 20.281330971999978,
-      "median": 20.281330971999978,
+      "mean": 59.94014678799999,
+      "median": 59.94014678799999,
       "std": 0.0,
-      "min": 20.281330971999978,
-      "max": 20.281330971999978,
-      "p95": 20.281330971999978,
-      "p99": 20.281330971999978
+      "min": 59.94014678799999,
+      "max": 59.94014678799999,
+      "p95": 59.94014678799999,
+      "p99": 59.94014678799999
     }
   },
   "configuration": {
@@ -128,30 +128,30 @@
   },
   "results": [
     {
-      "conversation_group_id": "check_mesh_status",
-      "tag": "check_mesh_Status",
+      "conversation_group_id": "check_mesh_status_no_kiali",
+      "tag": "no_kiali",
       "turn_id": "diagnose",
       "metric_identifier": "custom:answer_correctness",
       "result": "PASS",
-      "score": 0.92,
+      "score": 0.78,
       "threshold": null,
-      "execution_time": 23.044860758000027,
-      "evaluation_latency": 2.763529786000049,
-      "judge_llm_input_tokens": 886,
-      "judge_llm_output_tokens": 279,
+      "execution_time": 63.64737757299997,
+      "evaluation_latency": 3.707230784999979,
+      "judge_llm_input_tokens": 1638,
+      "judge_llm_output_tokens": 281,
       "judge_scores": [
         {
           "judge_id": "primary",
-          "score": 0.92,
-          "reason": "Custom answer correctness: 0.92 - The response is largely correct and well aligned with the expected structure. It clearly separates the mesh assessment into control plane, observability stack, and data plane, and it identifies the only issue as Grafana being unreachable. It also provides a plausible root cause: Grafana is not deployed in the cluster, supported by the cited absence of a Grafana pod and Service in `istio-system`. The impact and remediation steps are concrete and appropriate.",
-          "judge_input_tokens": 886,
-          "judge_output_tokens": 279,
+          "score": 0.78,
+          "reason": "Custom answer correctness: 0.78 - The response is largely aligned with the expected behavior: it gives a structured mesh health assessment, separates control plane and data plane, mentions Istiod, ingress/egress gateways, observability components, checks for sidecar injection, and identifies issues with evidence and remediation suggestions.",
+          "judge_input_tokens": 1638,
+          "judge_output_tokens": 281,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 20.281330971999978,
+      "agent_latency": 59.94014678799999,
       "tokens_per_second": null
     }
   ]

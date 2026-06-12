@@ -40,16 +40,15 @@ generate-ossm-results: check-venv
 	venv/bin/python scripts/generate_ossm_results.py
 
 # ── all / test: run every conversation in conversations.yaml ──────────────────
-all test: check-venv check-openai-key check-services check-bookinfo \
+test: check-venv check-openai-key check-services check-bookinfo \
+	check_mesh_status-test \
+	check_bookinfo_services-test \
+	check_latency_bookinfo_issue-test \
 	fix_bookinfo_routing-test \
 	fix_bookinfo_fault_injection-test \
-	troubleshoot_latency_trace-test \
-	check_mesh_status-test
+	troubleshoot_latency_trace-test
 
 test-without-mcp: check-venv check-openai-key check-services-ols \
-	fix_bookinfo_routing-test-without-mcp \
-	fix_bookinfo_fault_injection-test-without-mcp \
-	troubleshoot_latency_trace-test-without-mcp \
 	check_mesh_status-test-without-mcp
 
 # ── Individual conversation targets ───────────────────────────────────────────
@@ -58,30 +57,26 @@ fix_bookinfo_routing-test: check-venv check-openai-key check-services check-book
 	$(OSSM_EVAL_BASE) \
 	  --tag fix_bookinfo_routing
 
-fix_bookinfo_routing-test-without-mcp: check-venv check-openai-key check-services-ols
-	$(OSSM_EVAL_BASE) \
-	  --tag fix_bookinfo_routing_no_kiali
-
 fix_bookinfo_fault_injection-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
 	  --tag fault_injection_bookinfo
-
-fix_bookinfo_fault_injection-test-without-mcp: check-venv check-openai-key check-services-ols
-	$(OSSM_EVAL_BASE) \
-	  --tag fault_injection_no_kiali
 
 troubleshoot_latency_trace-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
 	  --tag troubleshoot_latency_trace
 
-troubleshoot_latency_trace-test-without-mcp: check-venv check-openai-key check-services-ols
-	$(OSSM_EVAL_BASE) \
-	  --tag latency_no_kiali
-
 check_mesh_status-test: check-venv check-openai-key check-services check-bookinfo
 	$(OSSM_EVAL_BASE) \
 	  --tag check_mesh_Status
 
+check_bookinfo_services-test: check-venv check-openai-key check-services check-bookinfo
+	$(OSSM_EVAL_BASE) \
+	  --tag check_bookinfo_services
+
+check_latency_bookinfo_issue-test: check-venv check-openai-key check-services check-bookinfo
+	$(OSSM_EVAL_BASE) \
+	  --tag latency_bookinfo_issue
+# No MCP Tests
 check_mesh_status-test-without-mcp: check-venv check-openai-key check-services-ols
 	$(OSSM_EVAL_BASE) \
 	  --tag no_kiali

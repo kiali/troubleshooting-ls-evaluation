@@ -34,50 +34,16 @@ api:
   extra_request_params:
     mode: troubleshooting
 
-embedding:
-  cache_enabled: false
 
-# Metrics metadata — registers every metric used in scenario_evals.yaml
+# Metrics evaluated per conversation turn
 metrics_metadata:
   turn_level:
     "custom:answer_correctness":
+      # threshold intentionally omitted: no agreed baseline yet.
+      # Scores are recorded to track the trend over time; a threshold
+      # will be introduced once the average trend is established.
       description: "Correctness vs expected answer using custom LLM evaluation"
-      default: false
-    "custom:keywords_eval":
-      description: "Validates that keywords are used in the response"
       default: true
-      evaluation_params:
-        - query
-        - response
-      evaluation_steps:
-        - "Step 1: Check if the response contains keywords related to the query content"
-        - "Step 2: Check if the response contains keywords related to the context"
-        - "Step 3: Check if the response contains keywords related to the tool calls"
-        - "Step 4: Check if the response contains keywords related to the expected answer"
-        
-    "custom:tool_eval":
-      description: "Validates that key tool calls were made (partial match — extra tools allowed)"
-      default: false
-      ordered: false    # don't enforce call order
-      full_match: false # allow extra tool calls beyond what is expected
-
-    "geval:generic_troubleshooting_experience":
-      description: "Verify if the agent is performing real evidence-based troubleshooting"
-      criteria: |
-        The response must be evaluated based on the following points:
-        - The agent which is answering is a Troubleshooting Agent, and its ability to be helpful in the troubleshooting must be evaluated
-        - The response must include real data evidence retrieved by tool and should not rely on generic or suggestions to address a generic problem
-        - The output of the response is the result of one or more tool calls that allow the agent to retrieve the real cluster information
-        - Evidences pointing to real cluster resources must be provided otherwise the response is only supposition or suggestions. This is the worst case that must be penalized a lot
-      evaluation_params:
-        - query
-        - response
-        - contexts
-      evaluation_steps:
-        - "Step 1: Check if the response is based on real cluster evidence or is just providing generic suggestions to a problem. In the latter the test MUST fail, otherwise go to next step."
-        - "Step 2: Check if the response contains an analysis related to the query content"
-        - "Step 3: Check if the response was able to detect an issue related to the user query and the context"
-        - "Step 4: Check if the response was able to provide fix for the problem"
 
   conversation_level:
     "deepeval:conversation_completeness":

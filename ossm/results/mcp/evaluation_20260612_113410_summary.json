@@ -1,89 +1,89 @@
 {
-  "timestamp": "2026-06-12T10:52:28.889965+00:00",
+  "timestamp": "2026-06-12T11:34:10.014645+00:00",
   "total_evaluations": 1,
   "summary_stats": {
     "overall": {
       "TOTAL": 1,
-      "PASS": 0,
-      "FAIL": 1,
+      "PASS": 1,
+      "FAIL": 0,
       "ERROR": 0,
       "SKIPPED": 0,
-      "pass_rate": 0.0,
-      "fail_rate": 100.0,
+      "pass_rate": 100.0,
+      "fail_rate": 0.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 1427,
-      "total_judge_llm_output_tokens": 371,
-      "total_judge_llm_tokens": 1798,
+      "total_judge_llm_input_tokens": 866,
+      "total_judge_llm_output_tokens": 296,
+      "total_judge_llm_tokens": 1162,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 515365,
-      "total_api_output_tokens": 1051,
-      "total_api_tokens": 516416,
-      "total_tokens": 518214
+      "total_api_input_tokens": 11094,
+      "total_api_output_tokens": 596,
+      "total_api_tokens": 11690,
+      "total_tokens": 12852
     },
     "by_metric": {
       "custom:answer_correctness": {
-        "pass": 0,
-        "fail": 1,
+        "pass": 1,
+        "fail": 0,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 0.0,
-        "fail_rate": 100.0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.42,
-          "median": 0.42,
+          "mean": 0.78,
+          "median": 0.78,
           "std": 0.0,
-          "min": 0.42,
-          "max": 0.42,
+          "min": 0.78,
+          "max": 0.78,
           "confidence_interval": null
         }
       }
     },
     "by_conversation": {
-      "check_latency_bookinfo_issue": {
-        "pass": 0,
-        "fail": 1,
+      "check_bookinfo_services": {
+        "pass": 1,
+        "fail": 0,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 0.0,
-        "fail_rate": 100.0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0
       }
     },
     "by_tag": {
-      "latency_bookinfo_issue": {
-        "pass": 0,
-        "fail": 1,
+      "check_bookinfo_services": {
+        "pass": 1,
+        "fail": 0,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 0.0,
-        "fail_rate": 100.0,
+        "pass_rate": 100.0,
+        "fail_rate": 0.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.42,
-          "median": 0.42,
+          "mean": 0.78,
+          "median": 0.78,
           "std": 0.0,
-          "min": 0.42,
-          "max": 0.42,
+          "min": 0.78,
+          "max": 0.78,
           "confidence_interval": null
         }
       }
     },
     "agent_latency_stats": {
       "count": 1,
-      "mean": 59.06819284599999,
-      "median": 59.06819284599999,
+      "mean": 14.466981185999998,
+      "median": 14.466981185999998,
       "std": 0.0,
-      "min": 59.06819284599999,
-      "max": 59.06819284599999,
-      "p95": 59.06819284599999,
-      "p99": 59.06819284599999
+      "min": 14.466981185999998,
+      "max": 14.466981185999998,
+      "p95": 14.466981185999998,
+      "p99": 14.466981185999998
     }
   },
   "configuration": {
@@ -128,30 +128,30 @@
   },
   "results": [
     {
-      "conversation_group_id": "check_latency_bookinfo_issue",
-      "tag": "latency_bookinfo_issue",
+      "conversation_group_id": "check_bookinfo_services",
+      "tag": "check_bookinfo_services",
       "turn_id": "diagnose",
       "metric_identifier": "custom:answer_correctness",
-      "result": "FAIL",
-      "score": 0.42,
+      "result": "PASS",
+      "score": 0.78,
       "threshold": null,
-      "execution_time": 62.65508549100002,
-      "evaluation_latency": 3.5868926450000345,
-      "judge_llm_input_tokens": 1427,
-      "judge_llm_output_tokens": 371,
+      "execution_time": 17.118669184999987,
+      "evaluation_latency": 2.6516879989999893,
+      "judge_llm_input_tokens": 866,
+      "judge_llm_output_tokens": 296,
       "judge_scores": [
         {
           "judge_id": "primary",
-          "score": 0.42,
-          "reason": "Custom answer correctness: 0.42 - The response is well-structured and includes useful observability-style evidence, but it does not align well with the expected diagnosis or likely root cause.",
-          "judge_input_tokens": 1427,
-          "judge_output_tokens": 371,
+          "score": 0.78,
+          "reason": "Custom answer correctness: 0.78 - The response is largely aligned with the expected outcome: it reports the bookinfo namespace as healthy, includes the main services, mentions traffic paths, mTLS, response times, and notes Grafana as an observability-only issue. It also clearly states there are no errors and no action is required, which matches the expected \u201chealthy with no errors\u201d case.",
+          "judge_input_tokens": 866,
+          "judge_output_tokens": 296,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 59.06819284599999,
+      "agent_latency": 14.466981185999998,
       "tokens_per_second": null
     }
   ]

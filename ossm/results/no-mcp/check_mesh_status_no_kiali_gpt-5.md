@@ -1,7 +1,7 @@
 # ✅ check_mesh_status_no_kiali
 
 **OLS model:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`  
-**Run:** 2026-06-12 10:51:10 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
+**Run:** 2026-06-12 11:34:11 &nbsp;|&nbsp; **Evaluations:** 1 &nbsp;|&nbsp; ✅ 1 PASS &nbsp; ❌ 0 FAIL &nbsp; ⚠️ 0 ERROR &nbsp; (100%)
 
 > Check the status of the mesh and identify any issues.
 
@@ -9,18 +9,18 @@
 
 ## Pass Rates
 
-![Pass Rates](graphs/evaluation_20260612_105110_pass_rates.png)
+![Pass Rates](graphs/evaluation_20260612_113411_pass_rates.png)
 
 <details>
 <summary>More graphs</summary>
 
 ### Score Distribution
 
-![Score Distribution](graphs/evaluation_20260612_105110_score_distribution.png)
+![Score Distribution](graphs/evaluation_20260612_113411_score_distribution.png)
 
 ### Status Breakdown
 
-![Status Breakdown](graphs/evaluation_20260612_105110_status_breakdown.png)
+![Status Breakdown](graphs/evaluation_20260612_113411_status_breakdown.png)
 
 </details>
 
@@ -28,7 +28,7 @@
 
 | Metric | ✅ | ❌ | ⚠️ | Pass Rate | Mean Score |
 |---|---|---|---|---|---|
-| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 0.86 |
+| `custom:answer_correctness` | 1 | 0 | 0 | ✅ 100% | 0.78 |
 
 ## Turns
 
@@ -40,7 +40,7 @@
 
 | Metric | Result | Score |
 |---|---|---|
-| `custom:answer_correctness` | ✅ PASS | `██████████████░░` 0.86 |
+| `custom:answer_correctness` | ✅ PASS | `████████████░░░░` 0.78 |
 
 <details>
 <summary>Actual tool calls</summary>
@@ -49,13 +49,14 @@
 - `resources_list`(apiVersion=maistra.io/v2, kind=ServiceMeshControlPlane)
 - `resources_list`(apiVersion=maistra.io/v1, kind=ServiceMeshMemberRoll)
 - `pods_list_in_namespace`(namespace=istio-system)
-- `pods_list_in_namespace`(namespace=openshift-operators)
-- `resources_list`(apiVersion=kiali.io/v1alpha1, kind=Kiali)
-- `resources_list`(apiVersion=jaegertracing.io/v1, kind=Jaeger)
+- `events_list`(namespace=istio-system)
 - `pods_list_in_namespace`(namespace=bookinfo)
-- `pods_list_in_namespace`(namespace=default)
-- `events_list`()
-- `pods_log`(name=istiod-d468976dc-k29ns, namespace=istio-system, tail=200)
+- `events_list`(namespace=bookinfo)
+- `resources_list`(apiVersion=networking.istio.io/v1beta1, kind=Gateway)
+- `resources_list`(apiVersion=networking.istio.io/v1beta1, kind=VirtualService)
+- `resources_list`(apiVersion=networking.istio.io/v1beta1, kind=DestinationRule)
+- `pods_log`(name=istiod-d468976dc-nqkfb, namespace=istio-system, tail=200)
+- `resources_list`(apiVersion=v1, kind=ServiceAccount, namespace=istio-system)
 
 </details>
 
@@ -63,28 +64,23 @@
 <summary>Agent response</summary>
 
 ```
-Assessment: Service Mesh status
+Assessment of service mesh status
 
-Scope
-- Mesh control plane namespace: istio-system
-- Workload namespace(s): bookinfo (labeled istio-injection=enabled, istio.io/rev=default). default also labeled for injection.
-
-Control plane health (istio-system)
-- istiod: 1/1 Running. Pod: istiod-d468976dc-k29ns, IP 10.244.1.3
-- Ingress gateway: 1/1 Running. Pod: istio-ingressgateway-7554995647-zd8lk, IP 10.244.1.5
-- Egress gateway: 1/1 Running. Pod: istio-egressgateway-69b8465445-f8pfd, IP 10.244.1.4
-- Kiali: 1/1 Running. Pod: kiali-79f9fc974c-slpb7, IP 10.244.1.9
-- Jaeger (all-in-one): 1/1 Running. Pod: jaeger-555f5df568-6tqpw, IP 10.244.1.8
-- Prometheus: 2/2 Running. Pod: prometheus-6964c8fbb8-skbc8, IP 10.244.1.6
-
-Data plane health (bookinfo)
-- All sample apps have sidecars and are healthy (2/2 Running):
-  - details-v1-6cc9db646f-8fw64
-  - productpage-v1-574c45789d-6mpzk
-  - ratings-v1-59d4b8b76f-9vh5b
-  - reviews-v1-7bbc4c5497-rvc8x
-  - reviews-v2-7b5b4d5d65-mb22n
-  - reviews-v3-5bcf66d84f-n6ltr…
+Control plane (istio-system)
+- Pods
+  - istiod-d468976dc-nqkfb: 1/1 Running (age ~5m18s, IP 10.244.1.3, node ci-worker)
+  - istio-ingressgateway-7554995647-bggnd: 1/1 Running (IP 10.244.1.5)
+  - istio-egressgateway-69b8465445-qqgns: 1/1 Running (IP 10.244.1.4)
+  - prometheus-6964c8fbb8-25mn8: 2/2 Running (IP 10.244.1.6)
+  - jaeger-555f5df568-npkd8: 1/1 Running (IP 10.244.1.7)
+  - kiali-79f9fc974c-6mqr5: 1/1 Running (IP 10.244.1.10)
+- Events highlights
+  - Transient warnings during bootstrap (service accounts initially not found) for:
+    - istiod: “serviceaccount istio-system/istiod not found” (recovered)
+    - istio-ingressgateway: “serviceaccount istio-system/istio-ingressgateway-service-account not found” (recovered)
+    - istio-egressgateway: “serviceaccount istio-system/istio-egressgateway-service-account not found” (recovered)
+  - Readiness probe 503s briefly for istiod and jaeger during startup; both resolved. No ongoing warnings.
+- ServiceAcco…
 ```
 
 </details>
@@ -103,5 +99,5 @@ Next steps and conclusion — provide kubectl commands to remediate identified i
 
 ---
 
-*Tokens — Judge: 1,977 | API: 75,435 | Total: 77,412*
-*Latency — mean: 49.5s | p95: 49.5s*
+*Tokens — Judge: 1,919 | API: 136,534 | Total: 138,453*
+*Latency — mean: 59.9s | p95: 59.9s*

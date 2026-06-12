@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-11T09:23:33.931431+00:00",
+  "timestamp": "2026-06-12T10:51:10.770853+00:00",
   "total_evaluations": 1,
   "summary_stats": {
     "overall": {
@@ -12,14 +12,14 @@
       "fail_rate": 0.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 1235,
-      "total_judge_llm_output_tokens": 334,
-      "total_judge_llm_tokens": 1569,
+      "total_judge_llm_input_tokens": 1524,
+      "total_judge_llm_output_tokens": 453,
+      "total_judge_llm_tokens": 1977,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 42557,
-      "total_api_output_tokens": 910,
-      "total_api_tokens": 43467,
-      "total_tokens": 45036
+      "total_api_input_tokens": 74330,
+      "total_api_output_tokens": 1105,
+      "total_api_tokens": 75435,
+      "total_tokens": 77412
     },
     "by_metric": {
       "custom:answer_correctness": {
@@ -33,11 +33,11 @@
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.78,
-          "median": 0.78,
+          "mean": 0.86,
+          "median": 0.86,
           "std": 0.0,
-          "min": 0.78,
-          "max": 0.78,
+          "min": 0.86,
+          "max": 0.86,
           "confidence_interval": null
         }
       }
@@ -66,24 +66,24 @@
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.78,
-          "median": 0.78,
+          "mean": 0.86,
+          "median": 0.86,
           "std": 0.0,
-          "min": 0.78,
-          "max": 0.78,
+          "min": 0.86,
+          "max": 0.86,
           "confidence_interval": null
         }
       }
     },
     "agent_latency_stats": {
       "count": 1,
-      "mean": 30.656902102000004,
-      "median": 30.656902102000004,
+      "mean": 49.53940586099998,
+      "median": 49.53940586099998,
       "std": 0.0,
-      "min": 30.656902102000004,
-      "max": 30.656902102000004,
-      "p95": 30.656902102000004,
-      "p99": 30.656902102000004
+      "min": 49.53940586099998,
+      "max": 49.53940586099998,
+      "p95": 49.53940586099998,
+      "p99": 49.53940586099998
     }
   },
   "configuration": {
@@ -106,7 +106,7 @@
       "provider": "openai",
       "model": "text-embedding-3-small",
       "provider_kwargs": null,
-      "cache_enabled": false
+      "cache_enabled": true
     },
     "api": {
       "api_base": "http://0.0.0.0:8080",
@@ -133,25 +133,25 @@
       "turn_id": "diagnose",
       "metric_identifier": "custom:answer_correctness",
       "result": "PASS",
-      "score": 0.78,
+      "score": 0.86,
       "threshold": null,
-      "execution_time": 33.779081512000005,
-      "evaluation_latency": 3.122179410000001,
-      "judge_llm_input_tokens": 1235,
-      "judge_llm_output_tokens": 334,
+      "execution_time": 54.89353666699998,
+      "evaluation_latency": 5.354130806000001,
+      "judge_llm_input_tokens": 1524,
+      "judge_llm_output_tokens": 453,
       "judge_scores": [
         {
           "judge_id": "primary",
-          "score": 0.78,
-          "reason": "Custom answer correctness: 0.78 - The response is mostly aligned with the expected behavior: it provides a structured mesh health assessment, notes that the control plane and data plane appear healthy, references SPIFFE identities and certificate availability, and includes next steps. It also correctly avoids claiming a major outage and identifies only transient warnings.",
-          "judge_input_tokens": 1235,
-          "judge_output_tokens": 334,
+          "score": 0.86,
+          "reason": "Custom answer correctness: 0.86 - The response is largely aligned with the expected behavior and contains a structured Istio mesh health assessment using Kubernetes-native evidence. It correctly covers:",
+          "judge_input_tokens": 1524,
+          "judge_output_tokens": 453,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 30.656902102000004,
+      "agent_latency": 49.53940586099998,
       "tokens_per_second": null
     }
   ]

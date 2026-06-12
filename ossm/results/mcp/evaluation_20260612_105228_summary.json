@@ -1,89 +1,89 @@
 {
-  "timestamp": "2026-06-11T09:17:45.598407+00:00",
+  "timestamp": "2026-06-12T10:52:28.889965+00:00",
   "total_evaluations": 1,
   "summary_stats": {
     "overall": {
       "TOTAL": 1,
-      "PASS": 1,
-      "FAIL": 0,
+      "PASS": 0,
+      "FAIL": 1,
       "ERROR": 0,
       "SKIPPED": 0,
-      "pass_rate": 100.0,
-      "fail_rate": 0.0,
+      "pass_rate": 0.0,
+      "fail_rate": 100.0,
       "error_rate": 0.0,
       "skipped_rate": 0.0,
-      "total_judge_llm_input_tokens": 817,
-      "total_judge_llm_output_tokens": 242,
-      "total_judge_llm_tokens": 1059,
+      "total_judge_llm_input_tokens": 1427,
+      "total_judge_llm_output_tokens": 371,
+      "total_judge_llm_tokens": 1798,
       "total_embedding_tokens": 0,
-      "total_api_input_tokens": 10961,
-      "total_api_output_tokens": 509,
-      "total_api_tokens": 11470,
-      "total_tokens": 12529
+      "total_api_input_tokens": 515365,
+      "total_api_output_tokens": 1051,
+      "total_api_tokens": 516416,
+      "total_tokens": 518214
     },
     "by_metric": {
       "custom:answer_correctness": {
-        "pass": 1,
-        "fail": 0,
+        "pass": 0,
+        "fail": 1,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 100.0,
-        "fail_rate": 0.0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.78,
-          "median": 0.78,
+          "mean": 0.42,
+          "median": 0.42,
           "std": 0.0,
-          "min": 0.78,
-          "max": 0.78,
+          "min": 0.42,
+          "max": 0.42,
           "confidence_interval": null
         }
       }
     },
     "by_conversation": {
-      "check_mesh_status": {
-        "pass": 1,
-        "fail": 0,
+      "check_latency_bookinfo_issue": {
+        "pass": 0,
+        "fail": 1,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 100.0,
-        "fail_rate": 0.0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0
       }
     },
     "by_tag": {
-      "check_mesh_Status": {
-        "pass": 1,
-        "fail": 0,
+      "latency_bookinfo_issue": {
+        "pass": 0,
+        "fail": 1,
         "error": 0,
         "skipped": 0,
-        "pass_rate": 100.0,
-        "fail_rate": 0.0,
+        "pass_rate": 0.0,
+        "fail_rate": 100.0,
         "error_rate": 0.0,
         "skipped_rate": 0.0,
         "score_statistics": {
           "count": 1,
-          "mean": 0.78,
-          "median": 0.78,
+          "mean": 0.42,
+          "median": 0.42,
           "std": 0.0,
-          "min": 0.78,
-          "max": 0.78,
+          "min": 0.42,
+          "max": 0.42,
           "confidence_interval": null
         }
       }
     },
     "agent_latency_stats": {
       "count": 1,
-      "mean": 18.451410652999982,
-      "median": 18.451410652999982,
+      "mean": 59.06819284599999,
+      "median": 59.06819284599999,
       "std": 0.0,
-      "min": 18.451410652999982,
-      "max": 18.451410652999982,
-      "p95": 18.451410652999982,
-      "p99": 18.451410652999982
+      "min": 59.06819284599999,
+      "max": 59.06819284599999,
+      "p95": 59.06819284599999,
+      "p99": 59.06819284599999
     }
   },
   "configuration": {
@@ -106,7 +106,7 @@
       "provider": "openai",
       "model": "text-embedding-3-small",
       "provider_kwargs": null,
-      "cache_enabled": false
+      "cache_enabled": true
     },
     "api": {
       "api_base": "http://0.0.0.0:8080",
@@ -128,30 +128,30 @@
   },
   "results": [
     {
-      "conversation_group_id": "check_mesh_status",
-      "tag": "check_mesh_Status",
+      "conversation_group_id": "check_latency_bookinfo_issue",
+      "tag": "latency_bookinfo_issue",
       "turn_id": "diagnose",
       "metric_identifier": "custom:answer_correctness",
-      "result": "PASS",
-      "score": 0.78,
+      "result": "FAIL",
+      "score": 0.42,
       "threshold": null,
-      "execution_time": 20.906426840999984,
-      "evaluation_latency": 2.455016188000002,
-      "judge_llm_input_tokens": 817,
-      "judge_llm_output_tokens": 242,
+      "execution_time": 62.65508549100002,
+      "evaluation_latency": 3.5868926450000345,
+      "judge_llm_input_tokens": 1427,
+      "judge_llm_output_tokens": 371,
       "judge_scores": [
         {
           "judge_id": "primary",
-          "score": 0.78,
-          "reason": "Custom answer correctness: 0.78 - The response is largely aligned with the expected structure and correctly identifies the main issue: Grafana is unreachable while the control plane and data plane are healthy. It provides a clear summary, evidence, and analysis, which matches the requested style.",
-          "judge_input_tokens": 817,
-          "judge_output_tokens": 242,
+          "score": 0.42,
+          "reason": "Custom answer correctness: 0.42 - The response is well-structured and includes useful observability-style evidence, but it does not align well with the expected diagnosis or likely root cause.",
+          "judge_input_tokens": 1427,
+          "judge_output_tokens": 371,
           "embedding_tokens": 0
         }
       ],
       "time_to_first_token": null,
       "streaming_duration": null,
-      "agent_latency": 18.451410652999982,
+      "agent_latency": 59.06819284599999,
       "tokens_per_second": null
     }
   ]

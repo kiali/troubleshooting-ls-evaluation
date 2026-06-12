@@ -1,0 +1,54 @@
+conversation_group_id,turn_id,metric_identifier,score,threshold,result,reason,query,response,tool_calls,expected_tool_calls,execution_time
+fix_bookinfo_fault_injection,investigate_and_fix,custom:answer_correctness,0.98,,PASS,"Custom answer correctness: 0.98 - The response is highly consistent with the expected answer. It correctly identifies the ratings VirtualService as the source of the issue, cites the key misconfiguration (`fault.abort` with `httpStatus: 503` and `percentage.value: 100`), and explains that this causes all ratings requests to fail even though pods are healthy and mTLS/auth are not the problem. It also correctly notes that the DestinationRule is not the root cause and suggests appropriate remediation options such as removing the fault injection or reducing it to 0%.","Some users are seeing errors on the Bookinfo product page — it looks like the ratings service is broken. All pods are running and mTLS / auth policies are not the issue. All Istio resources are in the 'bookinfo' namespace. Can you check the Istio VirtualService routing rules for the ratings service and find what's causing the problem?
+","Diagnosis
+
+Evidence
+- Istio VirtualService bookinfo/ratings currently injects a 100% abort fault:
+  - Resource: VirtualService ratings (networking.istio.io/v1)
+  - Namespace: bookinfo
+  - Spec excerpt:
+    - hosts: [""ratings.bookinfo.svc.cluster.local""]
+    - http[0].fault.abort.httpStatus: 503
+    - http[0].fault.abort.percentage.value: 100
+  - Full path: spec.http[0].fault.abort.httpStatus=503, percentage.value=100
+  - CreationTimestamp: 2026-06-12T10:59:35Z
+  - Referenced DestinationRule: bookinfo/ratings
+
+Root cause
+- The VirtualService for ratings has fault injection enabled at 100%, causing all requests to ratings to be aborted with HTTP 503. This explains product page errors despite pods being healthy and mTLS/auth being fine.
+
+Fix / Mitigation
+Choose one:
+1) Immediate restore (safe/reversible): remove the fault injection block entirely.
+- Desired VirtualService spec.http should only contain the route, e.g.:
+  - route: [{ destination: { host: ratings.bookinfo.svc.cluster.local, subset: v1 }, weight: 100 }]
+- Effect: ratings traffic will flow normally to subset v1.
+
+2) Restrict fault injection to test traffic (safe/reversible): keep fault injection but gate it behind a match (e.g., only user “jason” as in Bookinfo tutorial), and set normal route otherwise. Example:
+- http:
+  - - match:
+        - headers:
+            end-user:
+              exact: jason
+      fault:
+        abort:
+          httpStatus: 503
+          percentage:
+            value: 100
+      route:
+        - destination:
+            host: ratings.bookinfo.svc.cluster.local
+            subset: v1
+          weight: 100
+    - route:
+        - destination:
+            host: ratings.bookinfo.svc.cluster.local
+            subset: v1
+          weight: 100
+- Effect: only requests with end-user=jason will get 503; others succeed.
+
+3) Reduce fault to 0% (safe/reversible):
+- Set spec.http[0].fault.abort.percentage.value: 0.
+
+Recommendation
+- If this 503 was unintentional, apply Fix #1 now. If you were testing fault injection, apply Fix #2 so only test traffic is affected.","[[{""tool_name"": ""kiali_manage_istio_config_read"", ""arguments"": {""action"": ""list"", ""namespace"": ""bookinfo"", ""serviceName"": ""ratings""}}], [{""tool_name"": ""kiali_manage_istio_config_read"", ""arguments"": {""action"": ""get"", ""group"": ""networking.istio.io"", ""kind"": ""VirtualService"", ""namespace"": ""bookinfo"", ""object"": ""ratings"", ""version"": ""v1""}}]]",,15.594186517000026

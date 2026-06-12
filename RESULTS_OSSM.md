@@ -2,7 +2,7 @@
 
 Evaluation results for the **OpenShift LightSpeed (OLS) OSSM** test suite.
 
-**Latest run:** 2026-06-11 16:13:45 &nbsp;|&nbsp; **Provider:** `openai` &nbsp;|&nbsp; **Metric:** `custom:answer_correctness`
+**Latest run:** 2026-06-12 11:12:37 &nbsp;|&nbsp; **Provider:** `openai` &nbsp;|&nbsp; **Metric:** `custom:answer_correctness`
 
 **OLS backend:** `openai/gpt-5` &nbsp;|&nbsp; **Judge:** `openai/gpt-5.4-mini`
 
@@ -14,25 +14,55 @@ See [OSSM.md](OSSM.md) for how to run these tests and refresh this report.
 
 | Variant | Conversation | OLS Model | ✅ Pass | ❌ Fail | ⚠️ Error | Pass Rate | Mean Score |
 |---|---|---|---|---|---|---|---|
+| With MCP (`check_mesh_Status`) | [`check_bookinfo_services`](ossm/results/mcp/check_bookinfo_services_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.72 |
+| With MCP (`check_mesh_Status`) | [`check_latency_bookinfo_issue`](ossm/results/mcp/check_latency_bookinfo_issue_gpt-5.md) | `gpt-5` | 0 | 1 | 0 | ❌ 0% | 0.42 |
 | With MCP (`check_mesh_Status`) | [`check_mesh_status`](ossm/results/mcp/check_mesh_status_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.92 |
-| Without MCP (`no_kiali`) | [`check_mesh_status_no_kiali`](ossm/results/no-mcp/check_mesh_status_no_kiali_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.78 |
+| With MCP (`check_mesh_Status`) | [`fix_bookinfo_fault_injection`](ossm/results/mcp/fix_bookinfo_fault_injection_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.98 |
+| With MCP (`check_mesh_Status`) | [`fix_bookinfo_routing`](ossm/results/mcp/fix_bookinfo_routing_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.78 |
+| With MCP (`check_mesh_Status`) | [`troubleshoot_latency_trace`](ossm/results/mcp/troubleshoot_latency_trace_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.95 |
+| Without MCP (`no_kiali`) | [`check_mesh_status_no_kiali`](ossm/results/no-mcp/check_mesh_status_no_kiali_gpt-5.md) | `gpt-5` | 1 | 0 | 0 | ✅ 100% | 0.86 |
 
 ## Metric Result
 
 | Variant | Metric | Conversation | Result | Score |
 |---|---|---|---|---|
+| With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `check_bookinfo_services` | ✅ PASS | 0.72 |
+| With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `check_latency_bookinfo_issue` | ❌ FAIL | 0.42 |
 | With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `check_mesh_status` | ✅ PASS | 0.92 |
-| Without MCP (`no_kiali`) | `custom:answer_correctness` | `check_mesh_status_no_kiali` | ✅ PASS | 0.78 |
+| With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `fix_bookinfo_fault_injection` | ✅ PASS | 0.98 |
+| With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `fix_bookinfo_routing` | ✅ PASS | 0.78 |
+| With MCP (`check_mesh_Status`) | `custom:answer_correctness` | `troubleshoot_latency_trace` | ✅ PASS | 0.95 |
+| Without MCP (`no_kiali`) | `custom:answer_correctness` | `check_mesh_status_no_kiali` | ✅ PASS | 0.86 |
 
 ## Scenario Detail Pages
 
+### `check_bookinfo_services` — Check my bookinfo namespace services in my servicemesh
+
+- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/check_bookinfo_services_gpt-5.md) — 2026-06-12 10:51:17
+
+### `check_latency_bookinfo_issue` — Users are reporting that the Bookinfo productpage is occasionally taking 5+ seconds to load, but it doesn't happen on every request.
+
+- [❌ With MCP (`check_mesh_Status`) / `gpt-5` — 0% (0/1)](ossm/results/mcp/check_latency_bookinfo_issue_gpt-5.md) — 2026-06-12 10:52:28
+
 ### `check_mesh_status` — Check the status of the mesh and identify any issues.
 
-- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/check_mesh_status_gpt-5.md) — 2026-06-11 16:12:22
+- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/check_mesh_status_gpt-5.md) — 2026-06-12 10:50:45
 
 ### `check_mesh_status_no_kiali` — Check the status of the mesh and identify any issues.
 
-- [✅ Without MCP (`no_kiali`) / `gpt-5` — 100% (1/1)](ossm/results/no-mcp/check_mesh_status_no_kiali_gpt-5.md) — 2026-06-11 16:13:45
+- [✅ Without MCP (`no_kiali`) / `gpt-5` — 100% (1/1)](ossm/results/no-mcp/check_mesh_status_no_kiali_gpt-5.md) — 2026-06-12 10:51:10
+
+### `fix_bookinfo_fault_injection` — Multi-turn: a 100% fault injection on ratings causes 503 errors. Agent investigates, identifies root cause, and fixes it.
+
+- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/fix_bookinfo_fault_injection_gpt-5.md) — 2026-06-12 11:05:51
+
+### `fix_bookinfo_routing` — Multi-turn: reviews-v3 has weight 0 so never gets traffic. Agent investigates, identifies the routing issue, and fixes weights.
+
+- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/fix_bookinfo_routing_gpt-5.md) — 2026-06-12 10:59:20
+
+### `troubleshoot_latency_trace` — A 3-second delay fault is injected on the ratings service. The agent must identify the latency root cause using traces and fix the delay.
+
+- [✅ With MCP (`check_mesh_Status`) / `gpt-5` — 100% (1/1)](ossm/results/mcp/troubleshoot_latency_trace_gpt-5.md) — 2026-06-12 11:12:37
 
 ---
 
@@ -40,10 +70,10 @@ See [OSSM.md](OSSM.md) for how to run these tests and refresh this report.
 
 ### With MCP (`check_mesh_Status`)
 
-![Pass Rates — check_mesh_status](ossm/results/mcp/graphs/evaluation_20260611_161222_pass_rates.png)
+![Pass Rates — troubleshoot_latency_trace](ossm/results/mcp/graphs/evaluation_20260612_111237_pass_rates.png)
 
 ### Without MCP (`no_kiali`)
 
-![Pass Rates — check_mesh_status_no_kiali](ossm/results/no-mcp/graphs/evaluation_20260611_161345_pass_rates.png)
+![Pass Rates — check_mesh_status_no_kiali](ossm/results/no-mcp/graphs/evaluation_20260612_105110_pass_rates.png)
 
 *Generated by `scripts/generate_ossm_results.py`*

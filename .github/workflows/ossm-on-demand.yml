@@ -308,6 +308,7 @@ jobs:
       - name: Merge results
         run: |
           mkdir -p ossm/results/mcp ossm/results/no-mcp
+
           cp -r /tmp/ossm-artifacts/ossm-results-mcp/*    ossm/results/mcp/    2>/dev/null || true
           cp -r /tmp/ossm-artifacts/ossm-results-no-mcp/* ossm/results/no-mcp/ 2>/dev/null || true
           echo "--- merged tree ---"
@@ -330,6 +331,12 @@ jobs:
 
           BRANCH="results/ossm/${{ github.run_id }}"
           git checkout -b "$BRANCH"
+
+          # Remove old JSON/CSV so only the new run's files are committed
+          git rm -f --ignore-unmatch \
+            'ossm/results/mcp/*.json'    'ossm/results/mcp/*.csv' \
+            'ossm/results/no-mcp/*.json' 'ossm/results/no-mcp/*.csv' \
+            2>/dev/null || true
 
           # Force-add bypasses .gitignore so CSV/JSON/graphs/RESULTS_OSSM.md all land
           git add -f RESULTS_OSSM.md ossm/results/

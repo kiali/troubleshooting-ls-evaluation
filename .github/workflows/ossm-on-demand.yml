@@ -332,10 +332,12 @@ jobs:
           BRANCH="results/ossm/${{ github.run_id }}"
           git checkout -b "$BRANCH"
 
-          # Remove old JSON/CSV so only the new run's files are committed
+          # Remove old JSON/CSV/graphs so only the new run's files are committed
           git rm -f --ignore-unmatch \
-            'ossm/results/mcp/*.json'    'ossm/results/mcp/*.csv' \
-            'ossm/results/no-mcp/*.json' 'ossm/results/no-mcp/*.csv' \
+            'ossm/results/mcp/*.json'          'ossm/results/mcp/*.csv' \
+            'ossm/results/no-mcp/*.json'       'ossm/results/no-mcp/*.csv' \
+            'ossm/results/mcp/graphs/*.png'    'ossm/results/mcp/graphs/*.svg' \
+            'ossm/results/no-mcp/graphs/*.png' 'ossm/results/no-mcp/graphs/*.svg' \
             2>/dev/null || true
 
           # Force-add bypasses .gitignore so CSV/JSON/graphs/RESULTS_OSSM.md all land

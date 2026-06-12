@@ -11,7 +11,7 @@
       query: >
         Check the status of the mesh and identify any issues.
       expected_response: >
-        The agent should use Kiali tools to provide a structured Istio mesh health
+        The agent should use Kiali/OSSM MCP tools to provide a structured Istio mesh health
         assessment organized as: (1) control plane — report istiod version and health;
         (2) observability stack — list each component (Prometheus, Grafana, Tempo/Jaeger)
         with Healthy or Unreachable status; (3) data plane — report the overall health
@@ -117,7 +117,7 @@
       query: >
         Users are reporting that the Bookinfo productpage is occasionally taking 5+ seconds to load, but it doesn't happen on every request.
       expected_response: >
-        The agent should investigate the reported intermittent latency using Kiali
+        The agent should investigate the reported intermittent latency using Kiali/OSSM
         and Kubernetes tools. It should collect and cite: productpage service latency
         metrics (P95/P99 values), the Kiali traffic graph showing response times and
         error rates across the call chain (ingressgateway → productpage → reviews →
@@ -147,7 +147,7 @@
       query: >
         Check my bookinfo namespace services in my servicemesh
       expected_response: >
-        Using Kiali tools, the agent should provide a comprehensive health overview
+        Using Kiali/OSSM MCP tools, the agent should provide a comprehensive health overview
         of the bookinfo namespace covering: (1) overall namespace health status
         (Healthy, DEGRADED, or UNHEALTHY) with availability and error rate figures;
         (2) individual service health for all services present (details, productpage,
@@ -162,7 +162,7 @@
         - custom:answer_correctness
 
 # ---------------------------------------------------------------
-# Tests without kiali toolset available
+# Tests without kiali/ossm toolset available
 # ---------------------------------------------------------------
 # ── check_mesh_status_no_kiali ──────────────────────────────────────────────
 - conversation_group_id: check_mesh_status_no_kiali
@@ -174,7 +174,7 @@
       query: >
         Check the status of the mesh and identify any issues.
       expected_response: >
-        Without Kiali tools, the agent should provide a structured Istio mesh health
+        Without Kiali/OSSM MCP tools, the agent should provide a structured Istio mesh health
         assessment using Kubernetes-native tools (namespaces_list, resources_list,
         pods_list, events_list, pods_log), typically organized as:
 
